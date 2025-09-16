@@ -1,303 +1,179 @@
-/// <reference lib="webworker" />
+// simulation.worker.ts
 
-// --- TYPE DEFINITIONS (from types.ts) ---
-// Duplicated here because as a Blob worker, it can't import modules.
-// In a real build system, this would be bundled.
-
+// Since this is a worker, we can't use TS module imports directly.
+// The types are for documentation and structural compatibility.
+// Copied from types.ts for use within the worker.
 const GameEventType = {
   NARRATIVE: 'NARRATIVE',
   AGENT: 'AGENT',
   SYSTEM: 'SYSTEM',
 };
 
-// These interfaces are for TypeScript's benefit during development.
-// They don't exist in the final JavaScript, so we just need to declare them.
-interface GameEvent {
-  id: string;
-  type: string; // Simplified to string for worker context
-  title: string;
-  description: string;
-  timestamp: number;
-  isAiGenerated?: boolean;
-}
 
-interface Personality {
-  creativity: number;
-  pragmatism: number;
-  social: number;
-}
+/**
+ * @typedef {import('./types').SimulationState} SimulationState
+ * @typedef {import('./types').Agent} Agent
+ * @typedef {import('./types').GenesisData} GenesisData
+ * @typedef {import('./types').GameEvent} GameEvent
+ */
 
-interface Skills {
-  foraging: number;
-  woodcutting: number;
-  crafting: number;
-}
+/** @type {SimulationState | null} */
+let state = null;
+let gameLoop = null;
+const TICK_RATE = 100; // ms per tick, 10 ticks per second
+const WORLD_BOUNDS = { width: 1000, height: 1000 };
 
-interface Agent {
-  id: string;
-  name: string;
-  task: string;
-  mood: number;
-  hunger: number;
-  personality: Personality;
-  skills: Skills;
-  relationships: Record<string, number>;
-  x: number;
-  y: number;
-  targetX: number;
-  targetY: number;
-  isMoving: boolean;
-  direction: 'down' | 'up' | 'left' | 'right';
-}
+/** @param {GenesisData} genesisData */
+function initialize(genesisData) {
+    const initialAgents = genesisData.agentPersonalities.map((p, index) => ({
+        id: self.crypto.randomUUID(),
+        name: p.name,
+        task: 'Idle',
+        mood: 70,
+        hunger: 0,
+        personality: {
+            creativity: p.creativity,
+            pragmatism: p.pragmatism,
+            social: p.social,
+        },
+        skills: {
+            foraging: Math.floor(Math.random() * 10) + 1,
+            woodcutting: Math.floor(Math.random() * 10) + 1,
+            crafting: Math.floor(Math.random() * 10) + 1,
+        },
+        relationships: {},
+        x: 450 + index * 50, // Start near center
+        y: 500,
+        targetX: 450 + index * 50,
+        targetY: 500,
+        isMoving: false,
+        direction: 'down',
+    }));
 
-interface ColonyResources {
-  food: number;
-  wood: number;
-  stability: number;
-}
-
-interface CulturalValues {
-  collectivism: number;
-  pragmatism: number;
-  spirituality: number;
-}
-
-interface SimulationState {
-  agents: Agent[];
-  resources: ColonyResources;
-  culturalValues: CulturalValues;
-  events: GameEvent[];
-  day: number;
-  isPaused: boolean;
-}
-
-interface GenesisData {
-    colonyName: string;
-    startingEvent: {
-      title: string;
-      description: string;
+    state = {
+        agents: initialAgents,
+        resources: {
+            food: genesisData.initialResources.food,
+            wood: genesisData.initialResources.wood,
+            stability: 100,
+        },
+        culturalValues: genesisData.culturalValues,
+        events: [
+            {
+                id: self.crypto.randomUUID(),
+                type: GameEventType.NARRATIVE,
+                title: genesisData.startingEvent.title,
+                description: genesisData.startingEvent.description,
+                timestamp: Date.now(),
+                isAiGenerated: true,
+            }
+        ],
+        day: 1,
+        isPaused: true,
     };
-    initialResources: {
-      food: number;
-      wood: number;
-    };
-    culturalValues: CulturalValues;
-    agentPersonalities: {
-      name: string;
-      creativity: number;
-      pragmatism: number;
-      social: number;
-    }[];
+    
+    postStateUpdate();
 }
 
-
-// --- SIMULATION LOGIC ---
-
-// Simple unique ID generator
-const uuidv4 = () => `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-
-const TICK_RATE = 100; // ms per tick
-const TICKS_PER_DAY = 500;
-const WORLD_WIDTH = 800;
-const WORLD_HEIGHT = 600;
-const AGENT_SPEED = 0.5;
-
-let state: SimulationState;
-let simulationInterval: number | null = null;
-let tickCount = 0;
-
-function initialize(genesisData: GenesisData): void {
-  const initialAgents: Agent[] = genesisData.agentPersonalities.map((p) => ({
-    id: uuidv4(),
-    name: p.name,
-    task: 'Idle',
-    mood: 70,
-    hunger: 0,
-    personality: {
-      creativity: p.creativity,
-      pragmatism: p.pragmatism,
-      social: p.social,
-    },
-    skills: {
-      foraging: Math.floor(Math.random() * 5) + 1,
-      woodcutting: Math.floor(Math.random() * 5) + 1,
-      crafting: Math.floor(Math.random() * 5) + 1,
-    },
-    relationships: {},
-    x: Math.random() * (WORLD_WIDTH - 50) + 25, // Start away from edges
-    y: Math.random() * (WORLD_HEIGHT - 50) + 25,
-    targetX: -1,
-    targetY: -1,
-    isMoving: false,
-    direction: 'down',
-  }));
-
-  const startingEvent: GameEvent = {
-    id: uuidv4(),
-    type: GameEventType.NARRATIVE,
-    title: genesisData.startingEvent.title,
-    description: genesisData.startingEvent.description,
-    timestamp: Date.now(),
-    isAiGenerated: true,
-  };
-
-  state = {
-    agents: initialAgents,
-    resources: {
-      ...genesisData.initialResources,
-      stability: 100,
-    },
-    culturalValues: genesisData.culturalValues,
-    events: [startingEvent],
-    day: 1,
-    isPaused: true,
-  };
-}
-
-function updateAgent(agent: Agent): Agent {
-  // Update needs
-  agent.hunger = Math.min(100, agent.hunger + 0.05);
-  agent.mood = Math.max(0, agent.mood - 0.01); // Base mood decay
-
-  if (agent.hunger > 70) {
-      agent.mood = Math.max(0, agent.mood - 0.1);
-  }
-
-  // Handle tasks
-  if (agent.task === 'Idle' && !agent.isMoving) {
-    // Simple AI: decide on a new task
-    if (agent.hunger > 50 && state.resources.food > 0) {
-        agent.task = 'Eating';
-    } else if (state.resources.food < 50) {
-        agent.task = 'Foraging';
-        assignRandomTarget(agent);
-    } else if (state.resources.wood < 80) {
-        agent.task = 'Woodcutting';
-        assignRandomTarget(agent);
-    } else {
-        agent.task = 'Wandering';
-        assignRandomTarget(agent);
+function postStateUpdate() {
+    if (state) {
+        // postMessage natively uses the structured clone algorithm.
+        postMessage({ type: 'STATE_UPDATE', payload: state });
     }
-  }
+}
 
-  // Task execution
-  switch (agent.task) {
-    case 'Foraging':
-      if (!agent.isMoving) {
-        state.resources.food += 0.1 + (agent.skills.foraging / 10);
-        agent.task = 'Idle'; // Finish task and wait for next decision
-      }
-      break;
-    case 'Woodcutting':
-      if (!agent.isMoving) {
-        state.resources.wood += 0.1 + (agent.skills.woodcutting / 10);
-        agent.task = 'Idle';
-      }
-      break;
-    case 'Eating':
-        if (state.resources.food >= 1) {
-            state.resources.food -= 1;
-            agent.hunger = Math.max(0, agent.hunger - 30);
-            agent.mood = Math.min(100, agent.mood + 10);
-        }
-        agent.task = 'Idle';
-      break;
-    case 'Wandering':
-        if (!agent.isMoving) {
-            agent.task = 'Idle';
-        }
-        break;
-  }
+/** @param {Agent} agent */
+function updateAgentPosition(agent) {
+    if (!agent.isMoving) {
+        // Simple random movement for now
+        if (Math.random() < 0.01) { // 1% chance to start moving each tick
+            agent.isMoving = true;
+            agent.targetX = agent.x + (Math.random() - 0.5) * 100;
+            agent.targetY = agent.y + (Math.random() - 0.5) * 100;
 
-  // Handle movement
-  if (agent.isMoving) {
+            // Clamp to world bounds
+            agent.targetX = Math.max(0, Math.min(WORLD_BOUNDS.width, agent.targetX));
+            agent.targetY = Math.max(0, Math.min(WORLD_BOUNDS.height, agent.targetY));
+        }
+        return;
+    }
+    
+    const speed = 1; // pixels per tick
     const dx = agent.targetX - agent.x;
     const dy = agent.targetY - agent.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
-    if (distance < AGENT_SPEED * 2) {
-      agent.x = agent.targetX;
-      agent.y = agent.targetY;
-      agent.isMoving = false;
+    if (distance < speed) {
+        agent.x = agent.targetX;
+        agent.y = agent.targetY;
+        agent.isMoving = false;
+        agent.task = 'Idle'; // Reset task when destination is reached
     } else {
-      const angle = Math.atan2(dy, dx);
-      agent.x += Math.cos(angle) * AGENT_SPEED;
-      agent.y += Math.sin(angle) * AGENT_SPEED;
-      
-      // Update direction for animation
-      if (Math.abs(dx) > Math.abs(dy)) {
-          agent.direction = dx > 0 ? 'right' : 'left';
-      } else {
-          agent.direction = dy > 0 ? 'down' : 'up';
-      }
-    }
-  }
-  
-  return agent;
-}
-
-function assignRandomTarget(agent: Agent) {
-    agent.targetX = Math.random() * (WORLD_WIDTH - 50) + 25;
-    agent.targetY = Math.random() * (WORLD_HEIGHT - 50) + 25;
-    agent.isMoving = true;
-}
-
-function tick(): void {
-  if (!state || state.isPaused) {
-    return;
-  }
-  
-  tickCount++;
-  if (tickCount >= TICKS_PER_DAY) {
-      tickCount = 0;
-      state.day++;
-      // Daily resource consumption
-      const foodConsumed = state.agents.length;
-      state.resources.food = Math.max(0, state.resources.food - foodConsumed);
-
-      if (state.resources.food <= 0) {
-          state.agents.forEach(a => a.hunger += 10); // get hungry if no food
-          state.resources.stability -= 5;
-      }
-  }
-
-  state.agents = state.agents.map(updateAgent);
-  
-  self.postMessage({ type: 'STATE_UPDATE', payload: state });
-}
-
-function startSimulation(): void {
-  if (simulationInterval === null) {
-    simulationInterval = self.setInterval(tick, TICK_RATE);
-  }
-}
-
-function stopSimulation(): void {
-  if (simulationInterval !== null) {
-    self.clearInterval(simulationInterval);
-    simulationInterval = null;
-  }
-}
-
-self.onmessage = (e: MessageEvent): void => {
-  const { type, payload } = e.data;
-
-  switch (type) {
-    case 'INITIALIZE_SIMULATION':
-      initialize(payload as GenesisData);
-      self.postMessage({ type: 'STATE_UPDATE', payload: state });
-      break;
-    case 'TOGGLE_PAUSE':
-      if (state) {
-        state.isPaused = !state.isPaused;
-        if (state.isPaused) {
-          stopSimulation();
+        agent.x += (dx / distance) * speed;
+        agent.y += (dy / distance) * speed;
+        
+        // Update direction
+        if (Math.abs(dx) > Math.abs(dy)) {
+            agent.direction = dx > 0 ? 'right' : 'left';
         } else {
-          startSimulation();
+            agent.direction = dy > 0 ? 'down' : 'up';
         }
-        // Send state update to reflect pause status immediately
-        self.postMessage({ type: 'STATE_UPDATE', payload: state });
-      }
-      break;
-  }
+    }
+}
+
+
+/** @param {Agent} agent */
+function updateAgent(agent) {
+    // Update needs
+    agent.hunger += 0.05; // Hunger increases over time
+    if (agent.hunger > 100) agent.hunger = 100;
+
+    // Basic AI: if hungry, find food
+    if (agent.hunger > 70 && state && state.resources.food > 0) {
+        state.resources.food -= 1;
+        agent.hunger = 0;
+        agent.mood = Math.min(100, agent.mood + 10);
+    }
+    
+    // Decrease mood if hungry
+    if (agent.hunger > 80) {
+        agent.mood -= 0.1;
+    }
+    if (agent.mood < 0) agent.mood = 0;
+
+    // Update position
+    updateAgentPosition(agent);
+}
+
+
+function gameTick() {
+    if (!state || state.isPaused) return;
+
+    state.agents.forEach(updateAgent);
+    
+    // Other global updates can go here
+
+    postStateUpdate();
+}
+
+function togglePause() {
+    if (state) {
+        state.isPaused = !state.isPaused;
+        postStateUpdate();
+    }
+}
+
+self.onmessage = (e) => {
+    const { type, payload } = e.data;
+    switch (type) {
+        case 'INITIALIZE_SIMULATION':
+            initialize(payload);
+            break;
+        case 'TOGGLE_PAUSE':
+            togglePause();
+            break;
+    }
 };
+
+// Start the game loop
+gameLoop = self.setInterval(gameTick, TICK_RATE);

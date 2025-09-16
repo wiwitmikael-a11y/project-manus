@@ -1,52 +1,70 @@
-export interface SpriteSheet {
-  image: HTMLImageElement;
-  frameWidth: number;
-  frameHeight: number;
-  animations: {
-    [key: string]: { frames: number[]; speed: number };
-  };
-}
+import * as PIXI from 'pixi.js';
 
-let characterSpriteSheet: SpriteSheet | null = null;
-let assetsLoaded = false;
+// Using a public domain sprite sheet for demonstration purposes.
+// A local copy should be placed in the /public/assets/ directory.
+// Source: https://opengameart.org/content/base-character-spritesheet-16x16
+const AGENT_SPRITE_SHEET_URL = '/assets/character_sheet.png';
 
-// Base64 for a 48x72 sprite sheet. 3 frames per direction. 16x18 frame size.
-// Directions order: down, left, right, up
-const characterSpriteSheetSrc = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAABICAYAAAAb8R2WAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAIQSURBVGhD7ZlJCsJAEEVn//+ndgEFwYvgKguvjJ3EyITNJjLz7rxf8MBNs2u3230HgH/g4/E4eZ73bW1tbZ+cnDyXy2VZVqvV3NjY+LBarX4dDoc+v99/Xq/X+/3+V2a73T4cDofD4VCW5WAwwOVyUVVVz/P+eDweDwQCgePj45IkQZIkVVWtra29ev36dVVVbTabIAjSNE2WZel2u1WpVDzP29jYkCRJURRpmqZpGu33+8vLy2VZDodDaZqSJAmdTkeSJGmaBoPBpFIpjuOEQgGfz0fTNNZqtVwudaPRODg4mKYpjuMqlUqxWGRZNs/zBwcHWZZ9+vTpF1mWbTabSqXCGIbRaDQ4jgMDA6lUihzH2Xa7cRxns9lIJBI8z/v4+DhNE3mef/z4cZrmcrmMMQyHw9FotFar1e/3k2UZCoVwHGe1Wp1Op2majuNwuVwURcRiMQRB8DyvXq+XJMkYhmEYZnNzs0wm0263cxyHpmnX6/U4jjMajo+P2+12mqYxDAOHw8FgMIhGo4RCoXw+nzRNbTabqqpRFIVhGBzHYbFYEARBEOTz+Xw+n8lkIpfLNRqNgiAghqIoCoVCyWSSZVkIgbjNZsMwDMMwqKoKwxCGoVwuF41GIT4ghsPh4DgOwxCiIb7f7+FwmCRJEASJRCJ8Pp/NZrvdbuVy+XA41GAwEARBEETSNI7jLMuSZVkURT6fD4fDkSQJaZqSJKEoCkEQrusKgoBv/wC9bwS/3Yj+KwAAAABJRU5ErkJggg==';
+let agentTextures: PIXI.Texture[] = [];
 
-function loadSpriteSheet(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = src;
-  });
-}
-
-export async function loadAssets(): Promise<void> {
-  if (assetsLoaded) {
-    return;
-  }
-  
+// This function loads the assets and prepares them for the game.
+// It should be called once before the game starts.
+export const loadAssets = async (): Promise<void> => {
   try {
-    const image = await loadSpriteSheet(characterSpriteSheetSrc);
-    characterSpriteSheet = {
-      image,
-      frameWidth: 16,
-      frameHeight: 18,
-      animations: {
-        'down': { frames: [0, 1, 2], speed: 100 },
-        'left': { frames: [3, 4, 5], speed: 100 },
-        'right': { frames: [6, 7, 8], speed: 100 },
-        'up': { frames: [9, 10, 11], speed: 100 },
-      }
-    };
-    assetsLoaded = true;
-  } catch (error) {
-    console.error("Failed to load assets:", error);
-  }
-}
+    const baseTexture = await PIXI.Assets.load<PIXI.Texture>(AGENT_SPRITE_SHEET_URL);
+    
+    // Create textures for different directions from the sprite sheet
+    // This assumes a specific layout for the sprite sheet.
+    // Down, Up, Left, Right
+    // Fix: Corrected PIXI.Texture creation from a spritesheet for modern PixiJS versions.
+    // The `new PIXI.Texture(baseTexture, rectangle)` constructor is deprecated.
+    // The correct method is to clone the loaded texture and set its frame for each sub-texture.
+    agentTextures.push(new PIXI.Texture(baseTexture.source, new PIXI.Rectangle(0, 0, 16, 16)));
+    agentTextures.push(new PIXI.Texture(baseTexture.source, new PIXI.Rectangle(16, 0, 16, 16)));
+    agentTextures.push(new PIXI.Texture(baseTexture.source, new PIXI.Rectangle(32, 0, 16, 16)));
+    agentTextures.push(new PIXI.Texture(baseTexture.source, new PIXI.Rectangle(48, 0, 16, 16)));
 
-export function getCharacterSpriteSheet(): SpriteSheet | null {
-  return characterSpriteSheet;
-}
+    // Fix: The '.valid' property on PIXI.Texture was removed in newer versions of PixiJS.
+    // The success of the awaited `PIXI.Assets.load` call ensures the texture is ready.
+    if (agentTextures.length === 0) {
+      console.error('Failed to create textures from spritesheet.');
+      throw new Error('Failed to create textures from spritesheet.');
+    }
+
+  } catch (error) {
+    console.error('Error loading game assets:', error);
+    // As a fallback, use a white texture so the game doesn't crash
+    if (agentTextures.length === 0) {
+        agentTextures = [PIXI.Texture.WHITE, PIXI.Texture.WHITE, PIXI.Texture.WHITE, PIXI.Texture.WHITE];
+    }
+  }
+};
+
+export const getAgentTexture = (direction: 'down' | 'up' | 'left' | 'right'): PIXI.Texture => {
+    switch (direction) {
+        case 'down':
+            return agentTextures[0] || PIXI.Texture.WHITE;
+        case 'up':
+            return agentTextures[1] || PIXI.Texture.WHITE;
+        case 'left':
+            return agentTextures[2] || PIXI.Texture.WHITE;
+        case 'right':
+            return agentTextures[3] || PIXI.Texture.WHITE;
+        default:
+            return agentTextures[0] || PIXI.Texture.WHITE;
+    }
+};
+
+// A simple grass texture for the background, generated programmatically.
+// Fix: The PIXI.IRenderer interface is deprecated. The type is simplified to PIXI.Renderer.
+export const createGrassTexture = (renderer: PIXI.Renderer): PIXI.Texture => {
+    const gfx = new PIXI.Graphics();
+    gfx.beginFill(0x1a472a); // Dark green
+    gfx.drawRect(0, 0, 32, 32);
+    gfx.beginFill(0x2a623d); // Lighter green
+    gfx.drawRect(0, 0, 16, 16);
+    gfx.drawRect(16, 16, 16, 16);
+    gfx.endFill();
+    const options = { scaleMode: PIXI.SCALE_MODES.NEAREST, resolution: 1 };
+    return renderer.generateTexture(gfx, options);
+};

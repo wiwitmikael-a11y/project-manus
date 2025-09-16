@@ -1,5 +1,4 @@
 import React from 'react';
-import Button from './common/Button';
 
 interface CommandBarProps {
   isPaused: boolean;
@@ -8,21 +7,40 @@ interface CommandBarProps {
   onEventsClick: () => void;
 }
 
+const CommandButton: React.FC<{ onClick: () => void; icon: string; label: string; isActive?: boolean; }> = ({ onClick, icon, label, isActive }) => (
+    <button 
+        onClick={onClick}
+        className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-all duration-200
+                   text-slate-200 bg-slate-700/50 hover:bg-slate-600/70 backdrop-blur-sm
+                   border border-slate-600/80 focus:outline-none focus:ring-2 focus:ring-sky-500
+                   ${isActive ? 'bg-sky-500/30 text-sky-300' : ''}`}
+    >
+        <span className="text-lg">{icon}</span>
+        <span>{label}</span>
+    </button>
+);
+
+
 const CommandBar: React.FC<CommandBarProps> = ({ isPaused, onTogglePause, onColonyClick, onEventsClick }) => {
   return (
     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
-      <div className="flex items-center gap-2 p-2 bg-slate-800/60 backdrop-blur-md border border-slate-600/50 rounded-full shadow-lg">
-        <Button onClick={onColonyClick} variant="secondary">
-            <span className="text-lg" role="img" aria-label="Colony Status">🏛️</span>
-            <span className="hidden sm:inline ml-2">Koloni</span>
-        </Button>
-        <Button onClick={onEventsClick} variant="secondary">
-            <span className="text-lg" role="img" aria-label="Event Log">📜</span>
-            <span className="hidden sm:inline ml-2">Events</span>
-        </Button>
-        <Button onClick={onTogglePause} variant="primary">
-            {isPaused ? '▶️ Resume' : '⏸️ Pause'}
-        </Button>
+      <div className="flex items-center gap-3 p-2 bg-slate-800/60 backdrop-blur-md border border-slate-700 rounded-xl shadow-lg">
+        <CommandButton
+            onClick={onTogglePause}
+            icon={isPaused ? '▶️' : '⏸️'}
+            label={isPaused ? 'Resume' : 'Pause'}
+        />
+        <div className="w-px h-6 bg-slate-600"></div>
+        <CommandButton
+            onClick={onColonyClick}
+            icon="🏠"
+            label="Colony"
+        />
+        <CommandButton
+            onClick={onEventsClick}
+            icon="📜"
+            label="Events"
+        />
       </div>
     </div>
   );

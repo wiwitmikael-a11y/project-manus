@@ -77,40 +77,61 @@ export interface GenesisData {
   }[];
 }
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export async function generateGenesis(): Promise<GenesisData> {
-  try {
-    const prompt = `Generate the genesis parameters for a new game of 'Project MANUS', a sci-fi colony simulation about survivors on a lost planet. Provide a unique colony name, a compelling starting event, initial resources, distinct cultural values, and the personalities for the 3 founding colonists. Ensure the personalities are varied.`;
+  let lastError: Error | null = null;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: genesisSchema,
-        temperature: 1.0,
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const prompt = `Generate the genesis parameters for a new sci-fi colony simulation called 'Project MANUS'. Create a unique colony name, a starting event (title and 2-sentence description), initial resources (food and wood), cultural values (collectivism, pragmatism, spirituality), and unique personalities for 3 founding colonists.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: genesisSchema,
+          temperature: 1.0,
+        }
+      });
+      
+      const jsonStr = response.text.trim();
+      if (!jsonStr.startsWith('{') || !jsonStr.endsWith('}')) {
+          console.error(`Attempt ${attempt}: Received non-JSON response:`, jsonStr);
+          throw new Error("AI returned an invalid data format.");
       }
-    });
-    
-    const jsonStr = response.text.trim();
-    // A simple check to see if the response is valid JSON
-    if (!jsonStr.startsWith('{') || !jsonStr.endsWith('}')) {
-        console.error("Received non-JSON response:", jsonStr);
-        throw new Error("AI returned an invalid data format.");
-    }
-    const genesisData = JSON.parse(jsonStr) as GenesisData;
+      const genesisData = JSON.parse(jsonStr) as GenesisData;
 
-    // Validate the number of agents
-    if (!genesisData.agentPersonalities || genesisData.agentPersonalities.length !== 3) {
-      throw new Error("AI did not generate the required number of agent personalities.");
-    }
+      if (!genesisData.agentPersonalities || genesisData.agentPersonalities.length !== 3) {
+        throw new Error("AI did not generate the required number of agent personalities.");
+      }
 
-    return genesisData;
+      return genesisData; // Success!
 
-  } catch (error) {
-    console.error("Error generating genesis data from Gemini:", error);
-    if (error instanceof Error && error.message.includes('API key not valid')) {
-       throw new Error("The provided API key is invalid. Please check your configuration.");
+    } catch (error) {
+      console.error(`Attempt ${attempt} failed:`, error);
+      lastError = error instanceof Error ? error : new Error(String(error));
+      
+      if (lastError.message.includes('API key not valid')) {
+          throw new Error("The provided API key is invalid. Please check your configuration.");
+      }
+
+      if (attempt < MAX_RETRIES) {
+        await sleep(RETRY_DELAY);
+      }
     }
-    throw new Error("The AI storyteller is currently unavailable to create a new world.");
   }
+  
+  // If all retries failed
+  console.error("All attempts to generate genesis data failed.");
+  
+  if (lastError && (lastError.message.includes('500') || lastError.message.includes('INTERNAL'))) {
+      throw new Error("The AI's creative engine is experiencing a temporary issue. Please try again in a moment.");
+  }
+
+  throw new Error("The AI storyteller is currently unavailable after multiple attempts.");
 }
