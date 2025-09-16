@@ -34,6 +34,7 @@ export interface Agent {
   hunger: number;
   personality: Personality;
   skills: Skills;
+  relationships: Record<string, number>; // Affinity score with other agents by ID
   x: number;
   y: number;
   targetX: number;
