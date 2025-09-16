@@ -1,55 +1,41 @@
-// Fix: Implement the AgentSelectionPanel component for detailed agent views.
+// components/AgentSelectionPanel.tsx
 import React from 'react';
 // Fix: Added .ts extension to resolve module import error.
 import { Agent } from '../types.ts';
-import GlassmorphismModal from './common/GlassmorphismModal';
-// Fix: Added .tsx extension to resolve module import error.
-import AgentCard from './AgentCard.tsx';
 
 interface AgentSelectionPanelProps {
-  agent: Agent | null;
-  onClose: () => void;
+  agents: Agent[];
+  selectedAgentId: string | null;
+  onSelectAgent: (id: string) => void;
 }
 
-const AgentSelectionPanel: React.FC<AgentSelectionPanelProps> = ({ agent, onClose }) => {
-  if (!agent) {
-    return null;
-  }
-
+const AgentSelectionPanel: React.FC<AgentSelectionPanelProps> = ({ agents, selectedAgentId, onSelectAgent }) => {
   return (
-    <GlassmorphismModal 
-      isOpen={!!agent} 
-      onClose={onClose} 
-      title={`Agent Details - ${agent.name}`}
-    >
-      <div className="max-h-[80vh] overflow-y-auto pr-2">
-        <AgentCard agent={agent} />
-        
-        <div className="mt-4 pt-4 border-t border-slate-700/50">
-          <h4 className="font-semibold text-slate-200 mb-2">Current Status</h4>
-          <ul className="text-sm text-slate-300 space-y-1">
-            <li><strong>Position:</strong> ({agent.x.toFixed(1)}, {agent.y.toFixed(1)})</li>
-            <li><strong>Target:</strong> {agent.isMoving ? `(${agent.targetX.toFixed(1)}, ${agent.targetY.toFixed(1)})` : 'None'}</li>
-            <li><strong>Gender:</strong> {agent.gender.charAt(0).toUpperCase() + agent.gender.slice(1)}</li>
-            <li><strong>Animation State:</strong> {agent.animationState}</li>
-          </ul>
-        </div>
-        
-        {Object.keys(agent.relationships).length > 0 && (
-          <div className="mt-4 pt-4 border-t border-slate-700/50">
-            <h4 className="font-semibold text-slate-200 mb-2">Relationships</h4>
-            <ul className="text-sm text-slate-300 space-y-1">
-              {Object.entries(agent.relationships).map(([agentId, value]) => (
-                <li key={agentId} className="flex justify-between">
-                  <span>vs. {agentId}:</span>
-                  <span className="font-mono">{value.toFixed(0)}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+    <div>
+      <h4 className="font-semibold text-slate-200 mb-2">Colony Survivors</h4>
+      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+        {agents.map(agent => (
+          <button
+            key={agent.id}
+            onClick={() => onSelectAgent(agent.id)}
+            className={`w-full text-left p-2 rounded-md transition-colors duration-200 flex items-center space-x-3 ${
+              selectedAgentId === agent.id 
+              ? 'bg-sky-500/30 border border-sky-500' 
+              : 'bg-slate-700/50 hover:bg-slate-700 border border-transparent'
+            }`}
+          >
+            <div className="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-sm font-bold text-amber-400 border border-slate-500">
+                {agent.name.charAt(0)}
+            </div>
+            <div>
+              <p className="font-semibold text-sm text-slate-100">{agent.name}</p>
+              <p className="text-xs text-slate-400 capitalize">{agent.state}</p>
+            </div>
+          </button>
+        ))}
+         {agents.length === 0 && <p className="text-xs text-slate-500 pl-2">None.</p>}
       </div>
-    </GlassmorphismModal>
+    </div>
   );
 };
 

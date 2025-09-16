@@ -1,266 +1,169 @@
-
 // components/GameCanvas.tsx
-import React, { useRef, useEffect, useCallback } from 'react';
-// Fix: Added .ts extension to resolve module import error.
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { SimulationState, Agent } from '../types.ts';
-import { assetLoader } from '../assets';
-// Fix: Added .ts extension to resolve module import error.
-import { spritesheetMapping, SpritesheetData } from '../assets/assetMapping.ts';
-// Fix: Added .ts extension to resolve module import error.
+import { assetLoader } from '../assets.ts';
+import { spritesheetMapping } from '../assets/assetMapping.ts';
 import { terrainMapping } from '../assets/terrainAssetMapping.ts';
-// Fix: Added .ts extension to resolve module import error.
-import { resourceMapping } from '../assets/resourceAssetMapping.ts';
-
-export interface Camera {
-  x: number;
-  y: number;
-  zoom: number;
-  targetX?: number;
-  targetY?: number;
-}
 
 interface GameCanvasProps {
   simulationState: SimulationState;
-  cameraState: Camera;
-  setCamera: React.Dispatch<React.SetStateAction<Camera>>;
-  selectedAgent: Agent | null;
-  onAgentClick: (agent: Agent) => void;
+  selectedAgentId: string | null;
 }
 
-const TILE_SIZE = 128; // The base size of tiles in the assets
-const AGENT_CLICK_RADIUS = 0.5; // In world units (tiles)
+const TILE_SIZE = terrainMapping.tileSize; // e.g., 128
+const DRAW_TILE_SIZE = 64; // Size to draw tiles on screen
+const CAMERA_SMOOTHING = 0.05;
 
-const GameCanvas: React.FC<GameCanvasProps> = ({ simulationState, cameraState, setCamera, selectedAgent, onAgentClick }) => {
+const GameCanvas: React.FC<GameCanvasProps> = ({ simulationState, selectedAgentId }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const isDragging = useRef(false);
-  const lastMousePos = useRef({ x: 0, y: 0 });
+  const [camera, setCamera] = useState({ x: 50 * DRAW_TILE_SIZE, y: 50 * DRAW_TILE_SIZE });
+  // Fix: The `useRef` hook requires an initial value but was called without one.
+  // Provided `null` as the initial value and updated the type to `number | null`.
+  const animationFrameId = useRef<number | null>(null);
 
-  const draw = useCallback((ctx: CanvasRenderingContext2D, camera: Camera) => {
-    const canvas = ctx.canvas;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const getAgentDirection = (dx: number, dy: number): { dir: 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW', flip: boolean } => {
+    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    // This logic maps angles to the 5 directions available in the spritesheet (S, SE, E, NE, N)
+    // and determines if the sprite needs to be flipped horizontally for W, SW, NW.
+    if (angle >= -22.5 && angle < 22.5) return { dir: 'E', flip: false }; // East
+    if (angle >= 22.5 && angle < 67.5) return { dir: 'SE', flip: false }; // South-East
+    if (angle >= 67.5 && angle < 112.5) return { dir: 'S', flip: false }; // South
+    if (angle >= 112.5 && angle < 157.5) return { dir: 'SE', flip: true }; // South-West (Flipped SE)
+    if (angle >= 157.5 || angle < -157.5) return { dir: 'E', flip: true }; // West (Flipped E)
+    if (angle >= -157.5 && angle < -112.5) return { dir: 'NE', flip: true }; // North-West (Flipped NE)
+    if (angle >= -112.5 && angle < -67.5) return { dir: 'N', flip: false }; // North
+    if (angle >= -67.5 && angle < -22.5) return { dir: 'NE', flip: false }; // North-East
+    return { dir: 'S', flip: false }; // Default
+  };
 
-    // --- Camera Transform ---
-    ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height / 2);
-    ctx.scale(camera.zoom, camera.zoom);
-    ctx.translate(-camera.x * TILE_SIZE, -camera.y * TILE_SIZE);
-
-    const worldView = {
-      left: camera.x - (canvas.width / 2 / camera.zoom / TILE_SIZE),
-      right: camera.x + (canvas.width / 2 / camera.zoom / TILE_SIZE),
-      top: camera.y - (canvas.height / 2 / camera.zoom / TILE_SIZE),
-      bottom: camera.y + (canvas.height / 2 / camera.zoom / TILE_SIZE),
-    };
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !assetLoader.loaded) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     
-    // --- Render Terrain ---
-    const terrainAtlas = assetLoader.getImage('terrain_atlas');
-    if (terrainAtlas && simulationState.world.tileMap) {
-      const { tileMap } = simulationState.world;
-      const startY = Math.max(0, Math.floor(worldView.top));
-      const endY = Math.min(tileMap.length, Math.ceil(worldView.bottom));
-      const startX = Math.max(0, Math.floor(worldView.left));
-      const endX = Math.min(tileMap[0].length, Math.ceil(worldView.right));
+    ctx.imageSmoothingEnabled = false;
 
-      for (let y = startY; y < endY; y++) {
-        for (let x = startX; x < endX; x++) {
-          const tileId = tileMap[y][x];
-          const sx = (tileId % 8) * terrainMapping.tileSize;
-          const sy = Math.floor(tileId / 8) * terrainMapping.tileSize;
-          ctx.drawImage(terrainAtlas, sx, sy, terrainMapping.tileSize, terrainMapping.tileSize, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    const { width, height } = canvas.getBoundingClientRect();
+    canvas.width = width;
+    canvas.height = height;
+
+    let targetX = camera.x;
+    let targetY = camera.y;
+    const selectedAgent = simulationState.agents.find(a => a.id === selectedAgentId);
+
+    if (selectedAgent) {
+        targetX = selectedAgent.x * DRAW_TILE_SIZE;
+        targetY = selectedAgent.y * DRAW_TILE_SIZE;
+    }
+    
+    // Smooth camera movement
+    const newCameraX = camera.x + (targetX - camera.x) * CAMERA_SMOOTHING;
+    const newCameraY = camera.y + (targetY - camera.y) * CAMERA_SMOOTHING;
+    
+    ctx.clearRect(0, 0, width, height);
+    ctx.save();
+    ctx.translate(width / 2 - newCameraX, height / 2 - newCameraY);
+
+    // --- Draw Terrain ---
+    const terrainAtlas = assetLoader.getImage('terrain_atlas');
+    if (terrainAtlas && simulationState.world.tileMap.length > 0) {
+      const startCol = Math.floor((newCameraX - width / 2) / DRAW_TILE_SIZE);
+      const endCol = Math.ceil((newCameraX + width / 2) / DRAW_TILE_SIZE);
+      const startRow = Math.floor((newCameraY - height / 2) / DRAW_TILE_SIZE);
+      const endRow = Math.ceil((newCameraY + height / 2) / DRAW_TILE_SIZE);
+
+      for (let y = startRow; y < endRow; y++) {
+        for (let x = startCol; x < endCol; x++) {
+          if (y < 0 || y >= simulationState.world.tileMap.length || x < 0 || x >= simulationState.world.tileMap[0].length) continue;
+          const tileId = simulationState.world.tileMap[y][x];
+          const sx = (tileId % terrainMapping.atlasWidthInTiles) * TILE_SIZE;
+          const sy = Math.floor(tileId / terrainMapping.atlasWidthInTiles) * TILE_SIZE;
+          ctx.drawImage(terrainAtlas, sx, sy, TILE_SIZE, TILE_SIZE, x * DRAW_TILE_SIZE, y * DRAW_TILE_SIZE, DRAW_TILE_SIZE, DRAW_TILE_SIZE);
         }
       }
     }
+    
+    // --- Draw Agents ---
+    simulationState.agents.forEach((agent: Agent) => {
+      const spritesheet = assetLoader.getImage(agent.sprite);
+      if (!spritesheet) return;
 
-    // --- Render Resources ---
-    const resourceAtlas = assetLoader.getImage('resource_atlas');
-    if (resourceAtlas) {
-        simulationState.world.resourceNodes.forEach(node => {
-            if (node.x > worldView.left && node.x < worldView.right && node.y > worldView.top && node.y < worldView.bottom) {
-                const spriteData = resourceMapping.nodes[node.type];
-                ctx.drawImage(resourceAtlas, spriteData.sx, spriteData.sy, resourceMapping.tileSize, resourceMapping.tileSize, (node.x - 0.5) * TILE_SIZE, (node.y - 0.5) * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            }
-        });
-    }
+      const animType = agent.state === 'moving' ? 'walk' : 'idle';
+      const animData = spritesheetMapping[agent.sprite].animations[animType];
+      const frame = Math.floor(simulationState.tick / animData.speed) % animData.frames;
 
-    // --- Render Agents (sorted by Y for correct layering) ---
-    const sortedAgents = [...simulationState.agents].sort((a, b) => a.y - b.y);
-    sortedAgents.forEach(agent => {
-        // Draw selection circle
-        if (selectedAgent?.id === agent.id) {
-            ctx.beginPath();
-            ctx.arc(agent.x * TILE_SIZE, agent.y * TILE_SIZE, (TILE_SIZE / 2) * 0.7, 0, Math.PI * 2);
-            ctx.strokeStyle = '#f59e0b'; // amber-500
-            ctx.lineWidth = 4 / camera.zoom;
-            ctx.stroke();
-        }
+      let directionInfo = { dir: 'S' as 'N' | 'NE' | 'E' | 'SE' | 'S' , flip: false };
+      if (agent.destination) {
+          const dx = agent.destination.x - agent.x;
+          const dy = agent.destination.y - agent.y;
+          if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+              const result = getAgentDirection(dx, dy);
+              directionInfo = { dir: result.dir as any, flip: result.flip };
+          }
+      }
+      
+      const row = animData.rows[directionInfo.dir];
+      const sx = frame * spritesheetMapping[agent.sprite].frameSize;
+      const sy = row * spritesheetMapping[agent.sprite].frameSize;
+      
+      ctx.save();
+      const drawX = agent.x * DRAW_TILE_SIZE;
+      const drawY = agent.y * DRAW_TILE_SIZE;
+      
+      if (directionInfo.flip) {
+          ctx.translate(drawX, 0);
+          ctx.scale(-1, 1);
+          ctx.translate(-drawX, 0);
+      }
+      
+      // Draw selection circle
+      if (agent.id === selectedAgentId) {
+          ctx.beginPath();
+          ctx.arc(drawX, drawY + DRAW_TILE_SIZE / 4, DRAW_TILE_SIZE / 3, 0, 2 * Math.PI);
+          ctx.fillStyle = "rgba(255, 255, 0, 0.4)";
+          ctx.fill();
+      }
 
-        const spritesheet = assetLoader.getImage(agent.spritesheetKey);
-        const sheetData = spritesheetMapping[agent.spritesheetKey];
-        if (spritesheet && sheetData) {
-            drawAgent(ctx, agent, spritesheet, sheetData);
-        }
+      ctx.drawImage(
+        spritesheet, sx, sy,
+        spritesheetMapping[agent.sprite].frameSize,
+        spritesheetMapping[agent.sprite].frameSize,
+        drawX - DRAW_TILE_SIZE / 2,
+        drawY - DRAW_TILE_SIZE / 2,
+        DRAW_TILE_SIZE,
+        DRAW_TILE_SIZE
+      );
+      ctx.restore();
     });
 
     ctx.restore();
-  }, [simulationState, selectedAgent]);
+    animationFrameId.current = requestAnimationFrame(draw);
+  }, [simulationState, camera.x, camera.y, selectedAgentId]);
 
-  // Main render loop
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    // Update camera state without causing re-renders of the component itself
+    let cam = { x: camera.x, y: camera.y };
+    const selectedAgent = simulationState.agents.find(a => a.id === selectedAgentId);
+    if (selectedAgent) {
+        const targetX = selectedAgent.x * DRAW_TILE_SIZE;
+        const targetY = selectedAgent.y * DRAW_TILE_SIZE;
+        cam.x += (targetX - cam.x) * CAMERA_SMOOTHING;
+        cam.y += (targetY - cam.y) * CAMERA_SMOOTHING;
+        setCamera(cam);
+    }
+  }, [simulationState.tick, selectedAgentId]);
 
-    let animationFrameId: number;
-
-    const render = () => {
-      // Smooth camera movement
-      setCamera(prev => {
-        const targetX = prev.targetX ?? prev.x;
-        const targetY = prev.targetY ?? prev.y;
-        const newX = prev.x + (targetX - prev.x) * 0.1;
-        const newY = prev.y + (targetY - prev.y) * 0.1;
-        const newCam = { ...prev, x: newX, y: newY };
-        draw(ctx, newCam);
-        return newCam;
-      });
-      animationFrameId = window.requestAnimationFrame(render);
-    };
-    render();
-
+  useEffect(() => {
+    animationFrameId.current = requestAnimationFrame(draw);
     return () => {
-      window.cancelAnimationFrame(animationFrameId);
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+      }
     };
-  }, [draw, setCamera]);
+  }, [draw]);
 
-  // Resize handler
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const resize = () => {
-      canvas.width = canvas.clientWidth;
-      canvas.height = canvas.clientHeight;
-    };
-    resize();
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
-  }, []);
-  
-  // --- Input Handlers ---
-  const getMouseWorldPos = (e: React.MouseEvent<HTMLCanvasElement>): { x: number, y: number } => {
-    const canvas = canvasRef.current!;
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    const worldX = cameraState.x + (mouseX - canvas.width / 2) / cameraState.zoom / TILE_SIZE;
-    const worldY = cameraState.y + (mouseY - canvas.height / 2) / cameraState.zoom / TILE_SIZE;
-    
-    return { x: worldX, y: worldY };
-  };
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    isDragging.current = true;
-    lastMousePos.current = { x: e.clientX, y: e.clientY };
-  };
-
-  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (isDragging.current && (e.clientX !== lastMousePos.current.x || e.clientY !== lastMousePos.current.y)) {
-        // This was a drag, not a click
-        isDragging.current = false;
-        return;
-    }
-    isDragging.current = false;
-    
-    const worldPos = getMouseWorldPos(e);
-    const clickedAgent = simulationState.agents.find(agent => {
-        const dx = agent.x - worldPos.x;
-        const dy = agent.y - worldPos.y;
-        return Math.sqrt(dx*dx + dy*dy) < AGENT_CLICK_RADIUS;
-    });
-
-    if (clickedAgent) {
-        onAgentClick(clickedAgent);
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging.current) return;
-    const dx = e.clientX - lastMousePos.current.x;
-    const dy = e.clientY - lastMousePos.current.y;
-    lastMousePos.current = { x: e.clientX, y: e.clientY };
-    setCamera(prev => ({
-        ...prev,
-        x: prev.x - dx / prev.zoom / TILE_SIZE,
-        y: prev.y - dy / prev.zoom / TILE_SIZE,
-        targetX: prev.x - dx / prev.zoom / TILE_SIZE, // Update target to stop interpolation
-        targetY: prev.y - dy / prev.zoom / TILE_SIZE,
-    }));
-  };
-
-  const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    const zoomFactor = 1.1;
-    setCamera(prev => {
-        const newZoom = e.deltaY < 0 ? prev.zoom * zoomFactor : prev.zoom / zoomFactor;
-        return { ...prev, zoom: Math.max(0.5, Math.min(4, newZoom)) };
-    });
-  };
-
-  return <canvas 
-    ref={canvasRef} 
-    className="w-full h-full"
-    onMouseDown={handleMouseDown}
-    onMouseUp={handleMouseUp}
-    onMouseMove={handleMouseMove}
-    onMouseLeave={() => isDragging.current = false}
-    onWheel={handleWheel}
-  />;
+  return <canvas ref={canvasRef} className="w-full h-full bg-slate-900" />;
 };
-
-// Helper function to draw a single agent
-function drawAgent(ctx: CanvasRenderingContext2D, agent: Agent, spritesheet: HTMLImageElement, sheetData: SpritesheetData) {
-    const { frameSize, animations } = sheetData;
-    const anim = animations[agent.animationState] || animations.idle;
-
-    // --- Determine row based on direction ---
-    // Normalize angle to [0, 2PI]
-    let angle = agent.direction % (2 * Math.PI);
-    if (angle < 0) angle += 2 * Math.PI;
-
-    // Slice PI*2 into 8 sections for 8 directions
-    const slice = Math.PI / 4;
-    let dir: keyof typeof anim.rows;
-    let flip = false;
-
-    if (angle >= 0 && angle <= slice * 1) dir = 'E'; // E
-    else if (angle > slice * 1 && angle <= slice * 3) dir = 'SE'; // SE to S
-    else if (angle > slice * 3 && angle <= slice * 5) { dir = 'E'; flip = true; } // SW to W
-    else if (angle > slice * 5 && angle <= slice * 7) { dir = 'NE'; flip = true; } // NW to N
-    else dir = 'E'; // N to NE is just E in this spritesheet
-
-    // Refined logic for N/S which are more distinct
-    if (angle > slice * 2 && angle <= slice * 3) dir = 'S';
-    else if (angle > slice * 6 && angle <= slice * 7) dir = 'N';
-
-
-    const sy = anim.rows[dir] * frameSize;
-    const sx = agent.animationFrame * frameSize;
-
-    ctx.save();
-    ctx.translate(agent.x * TILE_SIZE, agent.y * TILE_SIZE);
-    if (flip) {
-      ctx.scale(-1, 1);
-    }
-    
-    // Draw the sprite centered on the agent's position
-    ctx.drawImage(
-      spritesheet,
-      sx, sy, frameSize, frameSize,
-      -frameSize / 2, -frameSize, // Offset to make feet at y=0
-      frameSize, frameSize
-    );
-    ctx.restore();
-}
 
 export default GameCanvas;

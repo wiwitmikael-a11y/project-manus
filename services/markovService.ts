@@ -1,86 +1,67 @@
 // services/markovService.ts
-import { Agent, CulturalValues, GameEvent, GameEventType, Gender } from '../types.ts';
-import { generateWorldElements, GeneratedWorldElements } from './geminiService.ts';
 
-const MALE_NAMES = ["Arion", "Bran", "Cael", "Darian", "Eron"];
-const FEMALE_NAMES = ["Lyra", "Seraphina", "Elara", "Rhea", "Gwen"];
+const maleNameSamples = [
+  "Jaxon", "Kael", "Roric", "Zane", "Vance", "Corbin", "Silas", "Orion", "Gideon", "Malakai",
+  "Jax", "Ryker", "Kade", "Cyrus", "Talon", "Ronan", "Lucian", "Darius", "Ezra", "Nikolai"
+];
 
-function generateRandomAgent(id: string, name: string, gender: Gender): Agent {
-  return {
-    id,
-    name,
-    gender,
-    spritesheetKey: gender === 'male' ? 'colonist_male_1' : 'colonist_female_1',
-    x: Math.random() * 5 + 22.5, // Spawn near center
-    y: Math.random() * 5 + 22.5,
-    isMoving: false,
-    targetX: 0,
-    targetY: 0,
-    animationState: 'idle',
-    animationFrame: 0,
-    animationTick: 0,
-    direction: Math.random() * Math.PI * 2,
-    relationships: {},
-  };
+const femaleNameSamples = [
+  "Lyra", "Seraphina", "Aria", "Elara", "Zoe", "Nova", "Iris", "Thalia", "Zara", "Rowan",
+  "Anya", "Sloane", "Wren", "Veda", "Cassia", "Nia", "Reyna", "Leda", "Sariel", "Kyra"
+];
+
+const chains: { [key: string]: { [key: string]: number } } = {};
+const startChars: { [key: string]: number } = {};
+
+function train(samples: string[]) {
+  for (const name of samples) {
+    if(name.length === 0) continue;
+    startChars[name[0]] = (startChars[name[0]] || 0) + 1;
+    for (let i = 0; i < name.length - 1; i++) {
+      const char = name[i];
+      const nextChar = name[i + 1];
+      if (!chains[char]) chains[char] = {};
+      chains[char][nextChar] = (chains[char][nextChar] || 0) + 1;
+    }
+  }
 }
 
-export interface GenesisData extends GeneratedWorldElements {
-    agents: Agent[];
-    culturalValues: CulturalValues;
-    startingEvent: GameEvent;
+function pickRandom(obj: { [key: string]: number }): string {
+  const keys = Object.keys(obj);
+  if (keys.length === 0) return '';
+  const totalWeight = keys.reduce((sum, key) => sum + obj[key], 0);
+  let random = Math.random() * totalWeight;
+  for (const key of keys) {
+    random -= obj[key];
+    if (random <= 0) return key;
+  }
+  return keys[keys.length - 1];
 }
 
-export async function generateGenesis(): Promise<GenesisData> {
-    // Generate world elements (biomes, structures, creatures) using Gemini
-    const worldElements = await generateWorldElements();
+let isTrained = false;
+function ensureTrained() {
+  if (isTrained) return;
+  train(maleNameSamples.concat(femaleNameSamples).map(n => n.toLowerCase()));
+  isTrained = true;
+}
 
-    // Procedurally generate starting agents
-    const agents: Agent[] = [];
-    const numAgents = 3;
-    const usedNames = new Set<string>();
+export function generateMarkovName(gender: 'male' | 'female' = 'male'): string {
+  ensureTrained();
+  
+  let name = pickRandom(startChars);
+  if (!name) return gender === 'male' ? 'John' : 'Jane';
 
-    for (let i = 0; i < numAgents; i++) {
-        const gender: Gender = Math.random() > 0.5 ? 'male' : 'female';
-        const namePool = gender === 'male' ? MALE_NAMES : FEMALE_NAMES;
-        let name;
-        do {
-            name = namePool[Math.floor(Math.random() * namePool.length)];
-        } while (usedNames.has(name));
-        usedNames.add(name);
-        
-        agents.push(generateRandomAgent(`agent_${i}`, name, gender));
-    }
+  const minLength = 4;
+  const maxLength = 8;
+  const length = Math.floor(Math.random() * (maxLength - minLength + 1)) + minLength;
 
-    // Initialize relationships
-    for (const agent of agents) {
-        for (const otherAgent of agents) {
-            if (agent.id !== otherAgent.id) {
-                agent.relationships[otherAgent.id] = Math.random() * 40 + 30; // Neutral starting relationships
-            }
-        }
-    }
-
-    // Generate starting cultural values
-    const culturalValues: CulturalValues = {
-        collectivism: Math.random() * 30 + 35, // 35-65
-        pragmatism: Math.random() * 40 + 40, // 40-80
-        spirituality: Math.random() * 20 + 10, // 10-30
-    };
-
-    // Create the first narrative event
-    const startingEvent: GameEvent = {
-        id: `event-${Date.now()}`,
-        type: GameEventType.NARRATIVE,
-        title: "The Awakening",
-        description: `A small group of survivors, drawn together by fate, find themselves in the shadow of a forgotten ruin. Their journey begins now.`,
-        timestamp: Date.now(),
-        isAiGenerated: true,
-    };
-
-    return {
-        ...worldElements,
-        agents,
-        culturalValues,
-        startingEvent,
-    };
+  while (name.length < length) {
+    const lastChar = name[name.length - 1];
+    if (!chains[lastChar]) break;
+    const nextChar = pickRandom(chains[lastChar]);
+    if (!nextChar) break;
+    name += nextChar;
+  }
+  
+  return name.charAt(0).toUpperCase() + name.slice(1);
 }

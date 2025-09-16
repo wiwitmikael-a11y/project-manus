@@ -1,12 +1,20 @@
+// assets/terrainAssetMapping.ts
+
 export interface TerrainMapping {
-  url: string;
-  tileSize: number;
+    url: string;
+    tileSize: number;
+    atlasWidthInTiles: number;
+    atlasHeightInTiles: number;
 }
 
-// TODO: Ganti URL placeholder ini dengan URL ke file atlas terrain 10x10 Anda di GitHub.
 const TERRAIN_ATLAS_URL = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus-assets/main/Terrain_Atlas_01.png';
+const TILE_SIZE = 128; // The source image tile size in pixels
+const ATLAS_WIDTH_IN_TILES = 8;
+const ATLAS_HEIGHT_IN_TILES = 8;
 
 export const terrainMapping: TerrainMapping = {
-  url: TERRAIN_ATLAS_URL,
-  tileSize: 128, // Ukuran setiap tile dalam file atlas (misal: 128x128px)
+    url: TERRAIN_ATLAS_URL,
+    tileSize: TILE_SIZE,
+    atlasWidthInTiles: ATLAS_WIDTH_IN_TILES,
+    atlasHeightInTiles: ATLAS_HEIGHT_IN_TILES,
 };

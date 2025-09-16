@@ -1,6 +1,9 @@
-import { spritesheetMapping } from './assets/assetMapping';
-import { terrainMapping } from './assets/terrainAssetMapping';
-import { resourceMapping } from './assets/resourceAssetMapping';
+// Fix: Added .ts extension to resolve module import error.
+import { spritesheetMapping } from './assets/assetMapping.ts';
+// Fix: Added .ts extension to resolve module import error.
+import { terrainMapping } from './assets/terrainAssetMapping.ts';
+// Fix: Added .ts extension to resolve module import error.
+import { resourceMapping } from './assets/resourceAssetMapping.ts';
 
 class AssetLoader {
   private images: Map<string, HTMLImageElement> = new Map();

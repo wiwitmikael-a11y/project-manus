@@ -1,104 +1,86 @@
-
 // simulation/simulationEngine.ts
 // Fix: Added .ts extension to resolve module import error.
 import { SimulationState, Agent } from '../types.ts';
-// Fix: Added .ts extension to resolve module import error.
-import { spritesheetMapping } from '../assets/assetMapping.ts';
 
-const AGENT_SPEED = 0.05; // Tiles per tick
-const TICKS_PER_HOUR = 600; // 10 ticks/sec * 60 seconds = 600 ticks. 1 minute real-time = 1 hour game-time.
+const AGENT_SPEED = 0.1; // tiles per tick
 
 function updateAgent(agent: Agent, state: SimulationState): Agent {
   let newAgent = { ...agent };
+  newAgent.state_timer -= 1;
 
-  // --- Animation ---
-  newAgent.animationTick = (newAgent.animationTick + 1);
-  
-  const animData = spritesheetMapping[newAgent.spritesheetKey].animations[newAgent.animationState];
-  if (animData && newAgent.animationTick >= animData.speed) {
-    newAgent.animationTick = 0;
-    newAgent.animationFrame = (newAgent.animationFrame + 1) % animData.frames;
-  }
+  // State machine for agent behavior
+  switch (newAgent.state) {
+    case 'idle':
+      if (newAgent.state_timer <= 0) {
+        // Find a random destination to wander to
+        const destX = newAgent.x + (Math.random() - 0.5) * 20;
+        const destY = newAgent.y + (Math.random() - 0.5) * 20;
+        newAgent.destination = { x: destX, y: destY };
+        newAgent.state = 'moving';
+      }
+      break;
 
-  // --- Movement ---
-  if (newAgent.isMoving) {
-    const dx = newAgent.targetX - newAgent.x;
-    const dy = newAgent.targetY - newAgent.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    case 'moving':
+      if (!newAgent.destination) {
+        newAgent.state = 'idle';
+        newAgent.state_timer = Math.random() * 200 + 50; // idle for 5-25 seconds
+        break;
+      }
+      
+      const dx = newAgent.destination.x - newAgent.x;
+      const dy = newAgent.destination.y - newAgent.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
 
-    if (distance < AGENT_SPEED) {
-      newAgent.x = newAgent.targetX;
-      newAgent.y = newAgent.targetY;
-      newAgent.isMoving = false;
-      newAgent.animationState = 'idle';
-      newAgent.animationFrame = 0;
-      newAgent.animationTick = 0;
-    } else {
-      const angle = Math.atan2(dy, dx);
-      newAgent.x += Math.cos(angle) * AGENT_SPEED;
-      newAgent.y += Math.sin(angle) * AGENT_SPEED;
-      newAgent.direction = angle;
-      newAgent.animationState = 'walk';
-    }
-  } else {
-    // --- Simple AI: Wander around ---
-    if (Math.random() < 0.005) { // Low chance each tick to start wandering
-      newAgent.isMoving = true;
-      const wanderDistance = Math.random() * 5 + 2;
-      const wanderAngle = Math.random() * Math.PI * 2;
-      newAgent.targetX = Math.max(0, Math.min(state.world.width, newAgent.x + Math.cos(wanderAngle) * wanderDistance));
-      newAgent.targetY = Math.max(0, Math.min(state.world.height, newAgent.y + Math.sin(wanderAngle) * wanderDistance));
-    }
+      if (distance < 1) {
+        newAgent.destination = null;
+        newAgent.state = 'idle';
+        newAgent.state_timer = Math.random() * 200 + 50;
+      } else {
+        newAgent.x += (dx / distance) * AGENT_SPEED;
+        newAgent.y += (dy / distance) * AGENT_SPEED;
+        
+        // Clamp to world bounds
+        newAgent.x = Math.max(0, Math.min(state.world.width - 1, newAgent.x));
+        newAgent.y = Math.max(0, Math.min(state.world.height - 1, newAgent.y));
+      }
+      break;
+    
+    // TODO: Implement 'working' state logic (gathering, building, etc.)
+    case 'working':
+      // Placeholder: after some time, go back to idle.
+      if (newAgent.state_timer <= 0) {
+        newAgent.state = 'idle';
+        newAgent.state_timer = Math.random() * 100;
+      }
+      break;
   }
 
   return newAgent;
 }
 
-function updateTime(state: SimulationState): SimulationState {
-    const newState = { ...state };
-    newState.tick += 1;
-
-    if (newState.tick >= TICKS_PER_HOUR) {
-        newState.tick = 0;
-        newState.hour += 1;
-        
-        // --- Resource Consumption (per hour) ---
-        const foodConsumption = newState.agents.length * 0.1;
-        newState.resources = {
-            ...newState.resources,
-            food: Math.max(0, newState.resources.food - foodConsumption)
-        };
-    }
-    
-    if (newState.hour >= 24) {
-        newState.hour = 0;
-        newState.day += 1;
-    }
-
-    if (newState.hour >= 20 || newState.hour < 6) {
-        newState.timeOfDay = 'night';
-    } else {
-        newState.timeOfDay = 'day';
-    }
-
-    return newState;
-}
-
-
+/**
+ * Runs one tick of the simulation.
+ * @param state The current simulation state.
+ * @returns The new simulation state after the tick.
+ */
 export function runSimulationTick(state: SimulationState): SimulationState {
-  if (state.isPaused) {
-    return state;
+  const newState = { ...state };
+  newState.tick += 1;
+
+  // Update agents
+  newState.agents = newState.agents.map(agent => updateAgent(agent, newState));
+
+  // Update resources (example: passive food consumption)
+  if (newState.tick % 100 === 0) { // Every 10 seconds
+    newState.resources.food -= newState.agents.length * 0.1;
+    if (newState.resources.food < 0) newState.resources.food = 0;
+  }
+  
+  // Update research points if a project is active
+  const researchBench = newState.world.placedStructures.find(s => s.blueprintId === 'research_bench_1' && s.isComplete);
+  if (newState.activeResearchId && researchBench) {
+      newState.resources.researchPoints += 0.1; // Gain 0.1 RP per tick
   }
 
-  // Deep copy agents array for modification
-  const updatedAgents = state.agents.map(agent => updateAgent(agent, state));
-  
-  let newState: SimulationState = {
-    ...state,
-    agents: updatedAgents,
-  };
-
-  newState = updateTime(newState);
-  
   return newState;
 }

@@ -1,12 +1,25 @@
 // types.ts
 
 export type Gender = 'male' | 'female';
-export type Temperament = 'DOCILE' | 'NEUTRAL' | 'HOSTILE';
-export type StructureType = 'SHELTER' | 'LANDMARK' | 'STORAGE' | 'CRAFTING' | 'RESEARCH';
-export type AnimationState = 'idle' | 'walk' | 'forage' | 'build';
-export type TimeOfDay = 'day' | 'night';
-export type ResourceNodeType = 'fallen_tree' | 'scrap_pile';
-export type LootContainerType = 'ruined_car' | 'debris_pile';
+
+export interface Agent {
+  id: string;
+  name: string;
+  gender: Gender;
+  x: number;
+  y: number;
+  sprite: string;
+  state: 'idle' | 'moving' | 'working';
+  state_timer: number;
+  destination: { x: number; y: number } | null;
+  path: { x: number; y: number }[] | null;
+  task: AgentTask | null;
+}
+
+export interface AgentTask {
+  type: 'gather' | 'build' | 'research' | 'explore';
+  targetId: string; // ID of resource node, structure blueprint, etc.
+}
 
 export enum GameEventType {
   NARRATIVE = 'NARRATIVE',
@@ -14,21 +27,13 @@ export enum GameEventType {
   SYSTEM = 'SYSTEM',
 }
 
-export interface Agent {
+export interface GameEvent {
   id: string;
-  name: string;
-  gender: Gender;
-  spritesheetKey: string;
-  x: number;
-  y: number;
-  isMoving: boolean;
-  targetX: number;
-  targetY: number;
-  animationState: AnimationState;
-  animationFrame: number;
-  animationTick: number;
-  direction: number; // Angle in radians
-  relationships: { [agentId: string]: number };
+  timestamp: number;
+  type: GameEventType;
+  title: string;
+  description: string;
+  isAiGenerated?: boolean;
 }
 
 export interface ColonyResources {
@@ -45,20 +50,13 @@ export interface CulturalValues {
   spirituality: number;
 }
 
-export interface GameEvent {
-  id: string;
-  type: GameEventType;
-  title: string;
-  description: string;
-  timestamp: number;
-  isAiGenerated?: boolean;
+export interface Biome {
+    id: string;
+    name: string;
+    description: string;
 }
 
-export interface Biome {
-  id: string;
-  name: string;
-  description: string;
-}
+export type StructureType = 'SHELTER' | 'LANDMARK' | 'STORAGE' | 'RESEARCH' | 'DEFENSE';
 
 export interface Structure {
     id: string;
@@ -67,12 +65,16 @@ export interface Structure {
     type: StructureType;
 }
 
+export type CreatureTemperament = 'DOCILE' | 'NEUTRAL' | 'HOSTILE';
+
 export interface Creature {
     id: string;
     name: string;
     description: string;
-    temperament: Temperament;
+    temperament: CreatureTemperament;
 }
+
+export type ResourceNodeType = 'fallen_tree' | 'scrap_pile';
 
 export interface ResourceNode {
     id: string;
@@ -81,6 +83,8 @@ export interface ResourceNode {
     y: number;
     amount: number;
 }
+
+export type LootContainerType = 'ruined_car' | 'debris_pile';
 
 export interface LootContainer {
     id: string;
@@ -91,57 +95,59 @@ export interface LootContainer {
 }
 
 export interface PlacedStructure {
-    id: string;
-    blueprintId: string;
-    x: number;
-    y: number;
-    buildProgress: number;
-    isComplete: boolean;
+  id: string;
+  blueprintId: string;
+  x: number;
+  y: number;
+  buildProgress: number;
+  isComplete: boolean;
 }
 
 export interface WorldData {
-  biomes: Biome[];
-  structures: Structure[];
-  creatures: Creature[];
-  resourceNodes: ResourceNode[];
-  lootContainers: LootContainer[];
-  placedStructures: PlacedStructure[];
-  width: number;
-  height: number;
-  tileMap: number[][] | null;
+    width: number;
+    height: number;
+    tileMap: number[][];
+    biomes: Biome[];
+    structures: Structure[];
+    creatures: Creature[];
+    resourceNodes: ResourceNode[];
+    lootContainers: LootContainer[];
+    placedStructures: PlacedStructure[];
 }
 
 export interface SimulationState {
-  agents: Agent[];
-  resources: ColonyResources;
-  culturalValues: CulturalValues;
-  events: GameEvent[];
-  world: WorldData;
-  day: number;
-  hour: number;
-  timeOfDay: TimeOfDay;
   tick: number;
   isPaused: boolean;
+  agents: Agent[];
+  resources: ColonyResources;
+  events: GameEvent[];
+  world: WorldData;
+  culturalValues: CulturalValues;
+  completedResearchIds: string[];
   knownBlueprintIds: string[];
   activeResearchId: string | null;
-  completedResearchIds: string[];
 }
 
-// Mendefinisikan struktur data untuk setiap bangunan yang dapat dibangun.
-export interface StructureDefinition {
-    id: string;
-    name: string;
-    description: string;
-    cost: { resource: 'wood' | 'scrap', amount: number }[];
-    type: StructureType;
-}
 
-// Mendefinisikan struktur data untuk setiap proyek riset.
+// From gameConstants
 export interface ResearchProject {
-    id: string;
-    name: string;
-    description: string;
-    cost: number; // Research points
-    requiredProjectIds: string[];
-    unlocksBlueprintId: string | null; // ID dari StructureDefinition yang dibuka
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  requiredProjectIds: string[];
+  unlocksBlueprintId: string | null;
+}
+
+export interface ResourceCost {
+  resource: keyof Omit<ColonyResources, 'stability' | 'researchPoints'>;
+  amount: number;
+}
+
+export interface StructureDefinition {
+  id: string;
+  name: string;
+  description: string;
+  cost: ResourceCost[];
+  type: StructureType;
 }
