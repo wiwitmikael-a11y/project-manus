@@ -11,32 +11,48 @@ class AssetLoader {
   public loaded: boolean = false;
 
   /**
-   * The definitive fix for cross-origin security errors, combining the standard
-   * `crossOrigin` attribute with a cache-busting parameter.
+   * The definitive, most robust fix for cross-origin security errors.
+   * This method manually fetches the image data, converts it to a local blob URL,
+   * and then loads it. This guarantees the image is treated as same-origin by the browser.
    */
-  private loadImage(key: string, url: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
+  private async loadImage(key: string, url: string): Promise<void> {
+    try {
+      // Step 1: Forcefully fetch the image data from the network, bypassing cache.
+      const response = await fetch(url, { cache: 'reload' });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
-      // Step 1: Set the crossOrigin attribute BEFORE setting the src.
-      // This is the standard way to request an image with the necessary CORS headers.
-      img.crossOrigin = 'Anonymous';
+      // Step 2: Convert the response data into a Blob.
+      const imageBlob = await response.blob();
 
-      img.onload = () => {
-        this.images.set(key, img);
-        resolve();
-      };
+      // Step 3: Create a temporary, local URL for the blob.
+      const localUrl = URL.createObjectURL(imageBlob);
 
-      img.onerror = (err) => {
-        console.error(`Failed to load image asset '${key}' from ${url}`, err);
-        reject(new Error(`Image loading failed for key: ${key}`));
-      };
-      
-      // Step 2: Set the image source with a cache-busting query parameter.
-      // This forces the browser to discard any cached, potentially "tainted"
-      // version of the image and perform a fresh request.
-      img.src = `${url}?t=${Date.now()}`;
-    });
+      // Step 4: Load the image from the local URL.
+      await new Promise<void>((resolve, reject) => {
+        const img = new Image();
+        // No crossOrigin attribute is needed because the URL is a local blob URL.
+        
+        img.onload = () => {
+          this.images.set(key, img);
+          // Step 5: Clean up the temporary URL to prevent memory leaks.
+          URL.revokeObjectURL(localUrl);
+          resolve();
+        };
+
+        img.onerror = (err) => {
+          console.error(`Failed to load image from blob URL for '${key}'`, err);
+          URL.revokeObjectURL(localUrl); // Also revoke on error
+          reject(new Error(`Image loading from blob failed for key: ${key}`));
+        };
+        
+        img.src = localUrl;
+      });
+    } catch (error) {
+      console.error(`Failed to fetch image asset '${key}' from ${url}`, error);
+      throw new Error(`Image fetching failed for key: ${key}`);
+    }
   }
 
   public async loadAssets(): Promise<void> {
