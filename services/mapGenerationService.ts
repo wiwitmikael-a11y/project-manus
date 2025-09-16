@@ -1,6 +1,7 @@
 // services/mapGenerationService.ts
 import { ResourceNode, ResourceNodeType } from '../types';
 
+// Perlin noise generator
 class PRNG {
   private seed: number;
   constructor(seed: number) { this.seed = seed; }
@@ -47,27 +48,66 @@ function createNoise(seed: number) {
   };
 }
 
-// Tile IDs (sesuai dengan atlas 10x10)
-const URBAN_TILES = [0, 1, 2];
-const WASTELAND_TILES = [10, 11, 12];
-const GRASS_TILES = [20, 21, 22];
+// Tile IDs based on the 8x8 user-provided atlas description.
+// Row 1: Tanah gelap (Dark Soil/Wasteland)
+const DARK_WASTELAND_TILES = [0, 1, 2, 3, 4, 5, 6, 7];
+// Row 2: Tanah coklat (Brown/Clay Soil)
+const CLAY_SOIL_TILES = [8, 9, 10, 11, 12, 13, 14, 15];
+// Row 3: Rumput tipis (Sparse Grass)
+const SPARSE_GRASS_TILES = [16, 17, 18, 19, 20, 21, 22, 23];
+// Row 4 & 5: Rumput hijau (Lush Grass)
+const LUSH_GRASS_TILES = [24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39];
+// Row 6: Tanah coklat kering (Dry Dirt Mix)
+const MIXED_DRY_DIRT_TILES = [40, 41, 42, 43, 44, 45, 46, 47];
+// Row 7: Tanah dengan fitur (Ground with Features/Debris)
+const DEBRIS_TILES = [49, 50, 51, 52, 53, 55]; // Ranting, kayu, akar, semak mati, kertas
+const GLOWING_MOSS_TILE = 48; // R7C1
+// Row 8: Tanah Radiasi (Radiation)
+const HAZARD_RADIATION_TILE = 56; // R8C1
+
+const getRandomTile = (tiles: number[]) => tiles[Math.floor(Math.random() * tiles.length)];
 
 export function generateMap(width: number, height: number): number[][] {
-  const noise = createNoise(Date.now());
+  const primaryNoise = createNoise(Date.now());
+  const featureNoise = createNoise(Date.now() + 1);
   const map: number[][] = [];
-  const scale = 15;
+  
+  const primaryScale = 25; // Controls the size of the main biomes. Larger = bigger biomes.
+  const featureScale = 10;  // Controls frequency of special features. Smaller = more frequent.
 
   for (let y = 0; y < height; y++) {
     map[y] = [];
     for (let x = 0; x < width; x++) {
-      const noiseValue = (noise(x / scale, y / scale) + 1) / 2;
+      const pVal = (primaryNoise(x / primaryScale, y / primaryScale) + 1) / 2; // Normalize to 0-1
+      const fVal = (featureNoise(x / featureScale, y / featureScale) + 1) / 2; // Normalize to 0-1
 
-      if (noiseValue < 0.35) {
-        map[y][x] = URBAN_TILES[Math.floor(Math.random() * URBAN_TILES.length)];
-      } else if (noiseValue < 0.65) {
-        map[y][x] = WASTELAND_TILES[Math.floor(Math.random() * WASTELAND_TILES.length)];
-      } else {
-        map[y][x] = GRASS_TILES[Math.floor(Math.random() * GRASS_TILES.length)];
+      // 1. Determine base biome using primary noise for large, seamless areas
+      if (pVal < 0.25) { // 25% of map is Dark Wasteland
+        map[y][x] = getRandomTile(DARK_WASTELAND_TILES);
+      } else if (pVal < 0.50) { // 25% is Clay/Dry Soil
+        map[y][x] = Math.random() > 0.5 ? getRandomTile(CLAY_SOIL_TILES) : getRandomTile(MIXED_DRY_DIRT_TILES);
+      } else if (pVal < 0.75) { // 25% is Sparse Grass
+        map[y][x] = getRandomTile(SPARSE_GRASS_TILES);
+      } else { // 25% is Lush Grass
+        map[y][x] = getRandomTile(LUSH_GRASS_TILES);
+      }
+      
+      // 2. Add features/details using secondary noise
+      if (fVal > 0.85) { // 15% chance for a special feature tile
+          if (pVal < 0.5 && Math.random() > 0.4) { // Add debris to wasteland and clay areas
+              map[y][x] = getRandomTile(DEBRIS_TILES);
+          } else if (pVal >= 0.75 && Math.random() > 0.7) { // Add wildflowers to lush grass
+               map[y][x] = 25; // R4C2 -> Grass with wildflowers
+          }
+      }
+      
+      // 3. Add very rare, unique tiles
+      if (fVal > 0.96) { // 4% chance for a rare tile
+          if (Math.random() > 0.5) {
+             map[y][x] = HAZARD_RADIATION_TILE;
+          } else {
+             map[y][x] = GLOWING_MOSS_TILE;
+          }
       }
     }
   }
@@ -83,28 +123,45 @@ export function generateMap(width: number, height: number): number[][] {
 export function spawnResourceNodes(tileMap: number[][], count: number): ResourceNode[] {
     const nodes: ResourceNode[] = [];
     const height = tileMap.length;
+    if (height === 0) return [];
     const width = tileMap[0].length;
     let nodeId = 0;
 
-    for(let i = 0; i < count; i++) {
-        const x = Math.floor(Math.random() * width);
-        const y = Math.floor(Math.random() * height);
-        const tile = tileMap[y][x];
+    // Define which tiles can spawn which resources for better world logic
+    const treeSpawnTiles = [...SPARSE_GRASS_TILES, ...LUSH_GRASS_TILES, 17, 22, 23, 29, 30, 37]; // Tiles with grass/trees
+    const scrapSpawnTiles = [...DARK_WASTELAND_TILES, ...CLAY_SOIL_TILES, ...DEBRIS_TILES, ...MIXED_DRY_DIRT_TILES, 15, 47]; // Tiles that are barren/rocky
 
-        let type: ResourceNodeType | null = null;
-        if (GRASS_TILES.includes(tile) && Math.random() > 0.4) {
-            type = 'fallen_tree';
-        } else if (URBAN_TILES.includes(tile) && Math.random() > 0.5) {
-            type = 'scrap_pile';
-        }
-        
-        if (type) {
-            nodes.push({
-                id: `node-${nodeId++}`,
-                type,
-                x, y,
-                amount: Math.random() * 50 + 50, // Jumlah sumber daya antara 50-100
-            });
+    for(let i = 0; i < count; i++) {
+        // Try up to 10 times to find a valid, non-overlapping spot
+        for (let attempt = 0; attempt < 10; attempt++) {
+            const x = Math.floor(Math.random() * width);
+            const y = Math.floor(Math.random() * height);
+            const tile = tileMap[y][x];
+
+            // Check if a node already exists here
+            if (nodes.some(node => node.x === x && node.y === y)) {
+                continue; // Try another spot
+            }
+
+            let type: ResourceNodeType | null = null;
+            // 50% chance to try spawning a resource on a valid tile
+            if (Math.random() > 0.5) {
+                if (treeSpawnTiles.includes(tile)) {
+                    type = 'fallen_tree';
+                } else if (scrapSpawnTiles.includes(tile)) {
+                    type = 'scrap_pile';
+                }
+            }
+            
+            if (type) {
+                nodes.push({
+                    id: `node-${nodeId++}`,
+                    type,
+                    x, y,
+                    amount: Math.random() * 50 + 50, // Resource amount between 50-100
+                });
+                break; // Found a spot, move to the next node
+            }
         }
     }
     return nodes;

@@ -65,12 +65,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ simulationState, cameraState, s
 
         // --- Draw Terrain ---
         if (tileMap && TERRAIN_ATLAS) {
+            const ATLAS_COLUMNS = 8; // The user-provided terrain atlas has 8 columns.
             for (let y = 0; y < worldHeight; y++) {
                 for (let x = 0; x < worldWidth; x++) {
                     const tileId = tileMap[y][x];
                     const { isoX, isoY } = worldToIso(x, y);
-                    const sourceX = (tileId % 10) * terrainMapping.tileSize;
-                    const sourceY = Math.floor(tileId / 10) * terrainMapping.tileSize;
+                    const sourceX = (tileId % ATLAS_COLUMNS) * terrainMapping.tileSize;
+                    const sourceY = Math.floor(tileId / ATLAS_COLUMNS) * terrainMapping.tileSize;
                     ctx.drawImage(TERRAIN_ATLAS, sourceX, sourceY, terrainMapping.tileSize, terrainMapping.tileSize, isoX, isoY - TILE_HEIGHT_HALF, TILE_WIDTH, TILE_WIDTH);
                 }
             }

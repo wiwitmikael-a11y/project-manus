@@ -12,9 +12,7 @@ export interface ResourceMapping {
   nodes: Record<ResourceNodeType, ResourceSpriteData>;
 }
 
-// Menggunakan atlas terrain yang sama untuk saat ini sebagai placeholder.
-// Anda bisa membuat atlas terpisah untuk objek dunia.
-// Misal: Pohon ada di (0, 3), Rongsokan ada di (1, 3) di atlas terrain 10x10.
+// All assets are currently sourced from the main terrain atlas.
 const RESOURCE_ATLAS_URL = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus-assets/main/png/Terrain_Atlas_01.png';
 const TILE_SIZE = 128;
 
@@ -22,13 +20,17 @@ export const resourceMapping: ResourceMapping = {
   url: RESOURCE_ATLAS_URL,
   tileSize: TILE_SIZE,
   nodes: {
+    // R7C3 -> Tanah coklat kering + tumpukan kayu kecil (Tile ID 50)
+    // This tile visually represents a fallen tree or wood debris well.
     'fallen_tree': {
-        sx: 0 * TILE_SIZE,
-        sy: 3 * TILE_SIZE,
+        sx: (50 % 8) * TILE_SIZE, // Column 2
+        sy: Math.floor(50 / 8) * TILE_SIZE, // Row 6
     },
+    // R2C8 -> Tanah coklat + bongkahan batu putih (Tile ID 15)
+    // This tile with a rock pile represents a scrap pile effectively.
     'scrap_pile': {
-        sx: 1 * TILE_SIZE,
-        sy: 3 * TILE_SIZE,
+        sx: (15 % 8) * TILE_SIZE, // Column 7
+        sy: Math.floor(15 / 8) * TILE_SIZE, // Row 1
     },
   },
 };
