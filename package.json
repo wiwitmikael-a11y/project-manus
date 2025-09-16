@@ -13,7 +13,8 @@
     "react-dom": "^19.1.1",
     "webworker": "^0.8.4",
     "pixi.js": "^8.13.2",
-    "@pixi/react": "^8.0.3"
+    "@pixi/react": "^8.0.3",
+    "@google/genai": "^1.19.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

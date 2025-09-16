@@ -1,4 +1,5 @@
 import { GenesisData, GameEventType, GameEvent, Agent, Biome, Structure, Creature, AgentAppearance } from '../types';
+import { generateWorldElements, GeneratedWorldElements } from './geminiService';
 
 export class MarkovChain {
   private chain: Map<string, Map<string, number>> = new Map();
@@ -56,24 +57,29 @@ export class MarkovChain {
 }
 
 const corpus = `
-The colony vessel 'Odyssey' is a ghost, a shattered memory against the bruised purple sky of Kepler-186f. We, the survivors, are the dream's final, ragged breath. Our cryo-pods were scattered like seeds across a valley filled with colossal, glowing fungi, their ethereal luminescence a constant, haunting watchlight in our new world. The very air thrums with a strange energy. We must build a new society from the scrap of our fallen starship. We must survive the unknown threats. Near the crash site stands a monolith of obsidian-like material. It radiates a low-frequency hum. Resources are a constant worry. Food is scarce. We have named our fledgling settlement 'Haven', a simple word that carries the weight of all our hopes. The nights are the hardest. They are never truly dark. Colonists reported vivid dreams: visions of sprawling cities deep beneath the planet's crust.
+The silence of the wasteland is a heavy blanket, broken only by the wind whistling through the skeletons of skyscrapers. This is what's left after 'The Fall'. We are the ghosts haunting the ruins of the Old World. Our shelter is a patched-up husk of a pre-Fall building, a small flicker of light in a dead city. Every sunrise is a victory, every can of food a treasure. We scavenge through the rust and dust, always listening for the skittering of mutated things in the shadows. Radiation pockets make the Geiger counter an unwelcome friend. The old highways are now just graveyards of steel. We found a stash of old books, their pages brittle, telling stories of a time before the sky burned. That world is gone. This one is ours to survive. We named our camp 'The Bastion', a defiant cry against the emptiness. The nights are long and filled with strange howls.
 `;
 
-const femaleFirstNames = ["Anya", "Zara", "Nia", "Elara"];
-const maleFirstNames = ["Kenji", "Liam", "Javier", "Roric"];
-const lastNames = ["Volkov", "Tanaka", "Singh", "Al-Jamil", "Ortega", "Corbin", "Li", "Falke"];
+const femaleFirstNames = ["Sarah", "Maya", "Elena", "Abby", "Zoe"];
+const maleFirstNames = ["Joel", "Alex", "Marco", "David", "Leo"];
+const lastNames = ["Miller", "Chen", "Grimes", "Sato", "Reyes", "Williams"];
 
 const narrativeGenerator = new MarkovChain();
 narrativeGenerator.train(corpus);
 
 const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+const getRandom = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+
+// --- Konfigurasi Penampilan Agen ---
+const MALE_SPRITESHEET = 'colonist_male_1';
+const FEMALE_SPRITESHEET = 'colonist_female_1';
 
 const generateUniqueName = (gender: 'male' | 'female'): string => {
     const first = gender === 'male'
-        ? maleFirstNames[getRandomInt(0, maleFirstNames.length - 1)]
-        : femaleFirstNames[getRandomInt(0, femaleFirstNames.length - 1)];
-    const last = lastNames[getRandomInt(0, lastNames.length - 1)];
+        ? getRandom(maleFirstNames)
+        : getRandom(femaleFirstNames);
+    const last = getRandom(lastNames);
     return `${first} ${last}`;
 };
 
@@ -81,28 +87,30 @@ const generateAgent = (id: number, worldWidth: number, worldHeight: number): Age
     const x = Math.random() * worldWidth;
     const y = Math.random() * worldHeight;
     const gender = getRandomInt(0, 1) === 0 ? 'male' : 'female';
-    const isMoving = true;
+    const isMoving = false; // Mulai dengan tidak bergerak
+
+    const spritesheet = gender === 'male' ? MALE_SPRITESHEET : FEMALE_SPRITESHEET;
 
     const appearance: AgentAppearance = {
-      spritesheet: gender === 'male' ? 'colonist_male_1' : 'colonist_female_1',
+      spritesheet,
     };
 
     return {
         id: `agent-${id}`,
         name: generateUniqueName(gender),
         gender: gender,
-        task: getRandomInt(0, 1) === 0 ? 'Foraging' : 'Idle',
-        mood: getRandomInt(60, 90),
-        hunger: getRandomInt(5, 20),
+        task: 'Idle', // Mulai dengan task Idle, biarkan AI yang menentukan
+        mood: getRandomInt(40, 70),
+        hunger: getRandomInt(15, 30),
         personality: { creativity: getRandomInt(1, 10), pragmatism: getRandomInt(1, 10), social: getRandomInt(1, 10) },
         skills: { foraging: getRandomInt(1, 5), woodcutting: getRandomInt(1, 5), crafting: getRandomInt(1, 5) },
         relationships: {},
         x, y,
-        targetX: Math.random() * worldWidth,
-        targetY: Math.random() * worldHeight,
+        targetX: x,
+        targetY: y,
         isMoving: isMoving,
         appearance,
-        direction: 'S',
+        direction: 'SE', // Default direction to match sprites
         animationState: isMoving ? 'walk' : 'idle',
         animationFrame: 0,
         animationTick: 0,
@@ -110,23 +118,17 @@ const generateAgent = (id: number, worldWidth: number, worldHeight: number): Age
 };
 
 let worldElementIdCounter = 0;
-const generateWorldElement = (type: 'biome' | 'structure' | 'creature'): Biome | Structure | Creature => {
-    const name = capitalize(narrativeGenerator.generate(getRandomInt(2,4)).replace('.', ''));
-    const description = narrativeGenerator.generate(getRandomInt(10, 20));
-    const id = `${type}-${worldElementIdCounter++}`; // FIX: Use a guaranteed unique counter
-    if (type === 'creature') {
-        const temperaments: Creature['temperament'][] = ['DOCILE', 'NEUTRAL', 'HOSTILE'];
-        return { id, name, description, temperament: temperaments[getRandomInt(0, 2)] };
-    }
-    if (type === 'structure') {
-        const types: Structure['type'][] = ['SHELTER', 'LANDMARK', 'STORAGE'];
-        return { id, name, description, type: types[getRandomInt(0, 2)] };
-    }
-    return { id, name, description };
-}
+const addId = <T extends { name: string; description: string }>(element: T, type: string): T & { id: string } => ({
+    ...element,
+    id: `${type}-${worldElementIdCounter++}`,
+});
+
 
 export async function generateGenesis(): Promise<GenesisData> {
-    worldElementIdCounter = 0; // Reset counter for each new world
+    worldElementIdCounter = 0;
+    
+    const worldElements = await generateWorldElements();
+    
     const agentCount = getRandomInt(3, 5);
     const agents = Array.from({ length: agentCount }, (_, i) => generateAgent(i + 1, 50, 50));
     
@@ -134,7 +136,7 @@ export async function generateGenesis(): Promise<GenesisData> {
         id: `event-genesis-0`,
         timestamp: Date.now(),
         type: GameEventType.NARRATIVE,
-        title: capitalize(narrativeGenerator.generate(getRandomInt(3, 5)).replace('.', '')),
+        title: "The First Day",
         description: narrativeGenerator.generate(getRandomInt(15, 25)),
         isAiGenerated: true,
     };
@@ -147,10 +149,10 @@ export async function generateGenesis(): Promise<GenesisData> {
             pragmatism: getRandomInt(40, 70),
             spirituality: getRandomInt(20, 50),
         },
-        biomes: Array.from({ length: getRandomInt(2, 3) }, () => generateWorldElement('biome') as Biome),
-        structures: Array.from({ length: getRandomInt(1, 2) }, () => generateWorldElement('structure') as Structure),
-        creatures: Array.from({ length: getRandomInt(2, 3) }, () => generateWorldElement('creature') as Creature),
+        biomes: worldElements.biomes.map(b => addId(b, 'biome')),
+        structures: worldElements.structures.map(s => addId(s, 'structure')),
+        creatures: worldElements.creatures.map(c => addId(c, 'creature')),
     };
     
-    return Promise.resolve(genesisData);
+    return genesisData;
 }

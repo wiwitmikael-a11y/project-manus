@@ -44,6 +44,7 @@ const ColonyInfoPanel: React.FC<ColonyInfoPanelProps> = ({ resources, culturalVa
                 <div className="bg-slate-800/50 p-2 rounded-lg">
                     <StatDisplay label="Food" value={resources.food.toFixed(1)} icon="🍎" />
                     <StatDisplay label="Wood" value={resources.wood.toFixed(1)} icon="🌲" />
+                    <StatDisplay label="Scrap" value={resources.scrap.toFixed(1)} icon="🔩" />
                     <StatDisplay label="Stability" value={`${resources.stability.toFixed(1)}%`} icon="🛡️" />
                 </div>
             </div>

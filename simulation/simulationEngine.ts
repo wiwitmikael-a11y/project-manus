@@ -1,117 +1,115 @@
-import { SimulationState, Agent, GameEvent, GameEventType, AgentDirection } from '../types';
+import { SimulationState, Agent, GameEvent, GameEventType, AgentDirection, ResourceNode } from '../types';
 import { spritesheetMapping } from '../assets/assetMapping';
 
 // Konfigurasi Simulasi
-const DAY_LENGTH_TICKS = 60;
-const AI_EVENT_INTERVAL_DAYS = 3;
+const TICKS_PER_HOUR = 10;
+const HOURS_PER_DAY = 24;
+const DAY_START_HOUR = 6;
+const NIGHT_START_HOUR = 19;
+const MOVEMENT_SPEED = 0.3;
 
-// Counter untuk memastikan ID event unik
 let eventIdCounter = 1;
 
-/**
- * Fungsi utilitas untuk memastikan nilai berada dalam rentang min/max.
- */
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
-/**
- * Menentukan arah mata angin (N, NE, E, dll.) berdasarkan vektor pergerakan agen.
- */
 const getDirection = (agent: Agent): AgentDirection => {
     if (!agent.isMoving) return agent.direction;
-
     const dx = agent.targetX - agent.x;
     const dy = agent.targetY - agent.y;
-
-    if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1) return agent.direction; // Pertahankan arah terakhir jika sangat dekat
-    
-    const angle = Math.atan2(dy, dx) * (180 / Math.PI); // Konversi radian ke derajat
+    if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1) return agent.direction;
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
     const calcIndex = Math.round((angle + 360) / 45) % 8;
-
-    // Peta dari indeks kalkulasi (0=Timur) ke arah mata angin
     const directionMap: AgentDirection[] = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
     return directionMap[calcIndex];
 };
 
+const findClosestNode = (agent: Agent, nodes: ResourceNode[]): ResourceNode | null => {
+    let closestNode: ResourceNode | null = null;
+    let minDistance = Infinity;
+    nodes.forEach(node => {
+        const dx = node.x - agent.x;
+        const dy = node.y - agent.y;
+        const distance = dx * dx + dy * dy;
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestNode = node;
+        }
+    });
+    return closestNode;
+};
 
-/**
- * Menjalankan satu tick dari simulasi.
- * Ini adalah FUNGSI MURNI: Ia mengambil state, menghitung state berikutnya, dan mengembalikannya.
- * TIDAK ADA MUTASI STATE atau efek samping di sini.
- * @param currentState State simulasi saat ini.
- * @returns State simulasi yang baru dan telah diperbarui.
- */
 export function runSimulationTick(currentState: SimulationState): SimulationState {
-    // Buat salinan mendalam untuk memastikan state asli tidak diubah.
     const nextState: SimulationState = JSON.parse(JSON.stringify(currentState));
 
     // --- Pembaruan Waktu ---
     nextState.tick++;
-    if (nextState.tick >= DAY_LENGTH_TICKS) {
+    if (nextState.tick >= TICKS_PER_HOUR) {
         nextState.tick = 0;
-        nextState.day++;
-        
-        // --- Pembaruan Harian ---
-        const dailyFoodConsumption = nextState.agents.length * 0.5;
-        nextState.resources.food = Math.max(0, nextState.resources.food - dailyFoodConsumption);
-
-        nextState.agents.forEach(agent => {
-            agent.hunger = clamp(agent.hunger + 5, 0, 100);
-            if (agent.hunger > 80 || nextState.resources.food === 0) {
-                agent.mood = clamp(agent.mood - 5, 0, 100);
-            }
-        });
-
-        // Picu event AI baru secara berkala
-        if (nextState.day % AI_EVENT_INTERVAL_DAYS === 0) {
-             const newEvent: Omit<GameEvent, 'id'|'timestamp'|'isAiGenerated'> = {
-                type: GameEventType.NARRATIVE,
-                title: `Peristiwa Hari ke-${nextState.day}`,
-                description: "Sesuatu yang baru terjadi di koloni."
-            };
-            nextState.events.push({
-                ...newEvent,
-                id: `event-${eventIdCounter++}`,
-                timestamp: Date.now(),
-            });
+        nextState.hour++;
+        if (nextState.hour >= HOURS_PER_DAY) {
+            nextState.hour = 0;
+            nextState.day++;
+            // --- Pembaruan Harian ---
+            const dailyFoodConsumption = nextState.agents.length * 0.8;
+            nextState.resources.food = Math.max(0, nextState.resources.food - dailyFoodConsumption);
         }
     }
+    nextState.timeOfDay = (nextState.hour >= DAY_START_HOUR && nextState.hour < NIGHT_START_HOUR) ? 'day' : 'night';
 
-    // --- Pembaruan per-Tick untuk Agen ---
+    // --- Pembaruan Agen ---
     nextState.agents.forEach(agent => {
-        // Update kebutuhan dasar
-        agent.hunger = clamp(agent.hunger + 0.1, 0, 100);
-        agent.mood = clamp(agent.mood - 0.05, 0, 100);
-
-        // Update tugas & perilaku
-        if (agent.task === 'Foraging') {
-            nextState.resources.food += 0.02;
-            if (Math.random() < 0.02) {
-                 agent.isMoving = true;
-                 agent.targetX = clamp(agent.x + (Math.random() - 0.5) * 10, 0, nextState.world.width);
-                 agent.targetY = clamp(agent.y + (Math.random() - 0.5) * 10, 0, nextState.world.height);
+        // --- Logika Tugas & Perilaku ---
+        if (agent.task === 'Idle') {
+            const availableNodes = nextState.world.resourceNodes.filter(node => 
+                !nextState.agents.some(a => a.targetNodeId === node.id)
+            );
+            if (availableNodes.length > 0) {
+                const targetNode = findClosestNode(agent, availableNodes);
+                if (targetNode) {
+                    agent.task = 'Moving to Target';
+                    agent.targetNodeId = targetNode.id;
+                    agent.targetX = targetNode.x;
+                    agent.targetY = targetNode.y;
+                    agent.isMoving = true;
+                }
             }
         }
 
-        // Logika pergerakan
+        // --- Logika Pergerakan ---
         if (agent.isMoving) {
             const dx = agent.targetX - agent.x;
             const dy = agent.targetY - agent.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-
             agent.direction = getDirection(agent);
 
             if (dist < 1) {
                 agent.isMoving = false;
+                if (agent.task === 'Moving to Target') {
+                    agent.task = 'Harvesting'; // Sampai di tujuan, mulai memanen
+                }
             } else {
-                agent.x += (dx / dist) * 0.5;
-                agent.y += (dy / dist) * 0.5;
+                const speed = nextState.timeOfDay === 'night' ? MOVEMENT_SPEED * 0.8 : MOVEMENT_SPEED;
+                agent.x += (dx / dist) * speed;
+                agent.y += (dy / dist) * speed;
             }
-        } else if (agent.task === 'Idle') {
-            if (Math.random() < 0.01) {
-                agent.isMoving = true;
-                agent.targetX = clamp(Math.random() * nextState.world.width, 0, nextState.world.width);
-                agent.targetY = clamp(Math.random() * nextState.world.height, 0, nextState.world.height);
-            }
+        }
+
+        // --- Logika Memanen ---
+        if (agent.task === 'Harvesting' && agent.targetNodeId) {
+             const node = nextState.world.resourceNodes.find(n => n.id === agent.targetNodeId);
+             if(node) {
+                 if(node.type === 'fallen_tree') nextState.resources.wood += 0.05;
+                 if(node.type === 'scrap_pile') nextState.resources.scrap += 0.05;
+                 node.amount -= 0.1;
+                 
+                 if(node.amount <= 0) {
+                     nextState.world.resourceNodes = nextState.world.resourceNodes.filter(n => n.id !== node.id);
+                     agent.task = 'Idle';
+                     agent.targetNodeId = undefined;
+                 }
+             } else {
+                 agent.task = 'Idle'; // Node hilang atau sudah diambil
+             }
         }
 
         // --- Pembaruan Animasi ---

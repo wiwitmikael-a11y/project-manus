@@ -5,8 +5,10 @@
  * Ini adalah pusat kendali untuk sistem rendering animasi.
  */
 
-const MALE_COLONIST_ATLAS_URL = 'png/Male_01.png';
-const FEMALE_COLONIST_ATLAS_URL = 'png/Female_01.png';
+// --- SUMBER ASET ---
+const MALE_COLONIST_ATLAS_URL = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus-assets/main/png/Male_01.png';
+const FEMALE_COLONIST_ATLAS_URL = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus-assets/main/png/Female_01.png';
+
 
 // Arah yang didukung langsung di spritesheet. Arah lain akan di-flip.
 type AnimationDirection = 'S' | 'SE' | 'E' | 'NE' | 'N';
