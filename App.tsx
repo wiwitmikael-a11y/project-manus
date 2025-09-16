@@ -1,6 +1,5 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { useSimulation } from './hooks/useSimulation';
-import GameCanvas from './components/GameCanvas';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import SimulationViewport from './components/SimulationViewport';
 import CommandBar from './components/CommandBar';
 import AgentCard from './components/AgentCard';
 import EventLog from './components/EventLog';
@@ -8,113 +7,149 @@ import ColonyInfoPanel from './components/ColonyInfoPanel';
 import WelcomeScreen from './components/WelcomeScreen';
 import LoadingScreen from './components/LoadingScreen';
 import GlassmorphismModal from './components/common/GlassmorphismModal';
-import { Agent } from './types';
+import { Agent, SimulationState } from './types';
+import { generateGenesis } from './services/markovService';
+import { runSimulationTick } from './simulation/simulationEngine';
 
-type GameState = 'welcome' | 'loading' | 'playing';
+type AppFlowState = 'welcome' | 'loading' | 'playing';
+
+const TICK_RATE = 1000; // ms per tick
 
 const App: React.FC = () => {
-  // --- CORE ENGINE HOOKS (dimulai segera saat aplikasi dimuat) ---
-  const { state, isLoading, error, togglePause } = useSimulation();
-  const [isPhaserReady, setPhaserReady] = useState(false);
-
-  // --- UI STATE ---
-  const [appState, setAppState] = useState<GameState>('welcome');
-  const [isFadingOut, setIsFadingOut] = useState(false);
+  // --- STATE MANAGEMENT TERPUSAT ---
+  const [appFlowState, setAppFlowState] = useState<AppFlowState>('welcome');
+  const [simulationState, setSimulationState] = useState<SimulationState | null>(null);
+  const [error, setError] = useState<string | null>(null);
   
-  // --- MODAL & SELECTION STATE ---
+  // --- UI State ---
+  const [isFadingOut, setIsFadingOut] = useState(false);
   const [isColonyPanelOpen, setColonyPanelOpen] = useState(false);
   const [isEventsPanelOpen, setEventsPanelOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
 
-  // --- LOGIKA TRANSISI ---
+  // --- GAME LOOP / SIMULATION TICK LOGIC ---
   useEffect(() => {
-    // Saat berada di layar pemuatan, periksa apakah AI dan Phaser sudah siap.
-    if (appState === 'loading' && !isLoading && isPhaserReady) {
+    if (appFlowState === 'playing' && simulationState && !simulationState.isPaused) {
+      const intervalId = setInterval(() => {
+        // Panggil mesin simulasi murni untuk menghitung state berikutnya
+        const nextState = runSimulationTick(simulationState);
+        setSimulationState(nextState);
+      }, TICK_RATE);
+      return () => clearInterval(intervalId);
+    }
+  }, [appFlowState, simulationState]);
+
+  // --- ALUR STARTUP SEKUENSIAL YANG DIPERKUAT ---
+  const startGame = useCallback(() => {
+    setAppFlowState('loading');
+    setError(null);
+    setSimulationState(null);
+
+    // TAHAP 2: GENERASI DUNIA (HANYA AI)
+    generateGenesis()
+      .then(genesisData => {
+        const initialState: SimulationState = {
+          agents: genesisData.agents,
+          resources: { food: 50, wood: 20, stability: 80 },
+          culturalValues: genesisData.culturalValues,
+          events: [genesisData.startingEvent],
+          day: 1,
+          tick: 0,
+          isPaused: false,
+          world: {
+            biomes: genesisData.biomes,
+            structures: genesisData.structures,
+            creatures: genesisData.creatures,
+            width: 50,
+            height: 50,
+          }
+        };
+        // AI Selesai. Data dunia sekarang ada. Ini akan memicu transisi.
+        setSimulationState(initialState);
+      })
+      .catch(err => {
+        const errorMessage = err instanceof Error ? err.message : "Gagal menghasilkan dunia AI.";
+        setError(errorMessage);
+        setAppFlowState('welcome'); // Kembali ke welcome screen jika gagal
+      });
+  }, []);
+
+  // Transisi dari loading ke playing HANYA SETELAH AI siap.
+  useEffect(() => {
+    if (simulationState && appFlowState === 'loading') {
       setIsFadingOut(true);
-      // Tunggu animasi fade-out selesai sebelum beralih ke game.
       const timer = setTimeout(() => {
-        setAppState('playing');
-        setIsFadingOut(false); // Reset untuk penggunaan di masa depan
-      }, 500); // Durasi ini harus cocok dengan animasi CSS.
+        setAppFlowState('playing');
+        setIsFadingOut(false);
+      }, 500); // Waktu untuk animasi fade-out
       return () => clearTimeout(timer);
     }
-  }, [appState, isLoading, isPhaserReady]);
+  }, [simulationState, appFlowState]);
 
   // --- HANDLERS ---
   const handleAgentClick = useCallback((agentId: string) => {
-    if (state) {
-      const agent = state.agents.find(a => a.id === agentId);
+    if (simulationState) {
+      const agent = simulationState.agents.find(a => a.id === agentId);
       setSelectedAgent(agent || null);
     }
-  }, [state]);
+  }, [simulationState]);
+
+  const togglePause = useCallback(() => {
+    setSimulationState(currentState => 
+      currentState ? { ...currentState, isPaused: !currentState.isPaused } : null
+    );
+  }, []);
 
   const handleCloseAgentModal = () => setSelectedAgent(null);
-  
-  const startGame = () => {
-    setAppState('loading');
-  };
 
   // --- RENDER ---
+  const showGameUI = appFlowState === 'playing' && simulationState;
+
   return (
     <div className="h-screen w-screen bg-slate-900 overflow-hidden">
-      {/*
-        GameCanvas dan container-nya selalu ada di DOM untuk memungkinkan Phaser diinisialisasi.
-        Kita menggunakan CSS untuk menyembunyikannya secara visual hingga game berada dalam state 'playing'.
-        Menggunakan 'visibility' lebih baik daripada 'display: none' karena tidak mempengaruhi layout atau re-inisialisasi.
-      */}
-      <div 
-        className={`w-full h-full transition-opacity duration-500 ${appState === 'playing' ? 'opacity-100' : 'opacity-0'}`}
-        style={{ visibility: appState === 'playing' ? 'visible' : 'hidden' }}
-        aria-hidden={appState !== 'playing'}
-      >
-        <GameCanvas 
-          state={state} 
-          onAgentClick={handleAgentClick} 
-          selectedAgentId={selectedAgent?.id || null}
-          onReady={() => setPhaserReady(true)}
-        />
-      </div>
+      {appFlowState === 'welcome' && <WelcomeScreen onBegin={startGame} />}
       
-      {/* Layar yang menutupi kanvas yang tersembunyi */}
-      {appState === 'welcome' && <WelcomeScreen onBegin={startGame} />}
-      {(appState === 'loading' || isFadingOut) && <LoadingScreen isFadingOut={isFadingOut} />}
+      {(appFlowState === 'loading' || isFadingOut) && <LoadingScreen isFadingOut={isFadingOut} />}
 
-      {/* UI game utama, hanya dirender saat bermain */}
-      {appState === 'playing' && state && (
+      {/* Viewport berbasis DOM yang baru dan stabil */}
+      {simulationState && appFlowState !== 'welcome' && (
+         <SimulationViewport 
+            state={simulationState} 
+            onAgentClick={handleAgentClick} 
+            selectedAgentId={selectedAgent?.id || null}
+          />
+      )}
+
+      {showGameUI && (
         <div className="animate-fade-in">
           <CommandBar 
-            isPaused={state.isPaused}
+            isPaused={simulationState.isPaused}
             onTogglePause={togglePause}
             onColonyClick={() => setColonyPanelOpen(true)}
             onEventsClick={() => setEventsPanelOpen(true)}
           />
-
           <GlassmorphismModal 
             isOpen={isColonyPanelOpen} 
             onClose={() => setColonyPanelOpen(false)} 
-            title={`Status Koloni (Hari ke-${state.day})`}
+            title={`Status Koloni (Hari ke-${simulationState.day})`}
           >
             <div className="max-h-[60vh] overflow-y-auto pr-2">
               <ColonyInfoPanel 
-                  resources={state.resources} 
-                  culturalValues={state.culturalValues}
-                  biomes={state.biomes}
-                  structures={state.structures}
-                  creatures={state.creatures}
+                  resources={simulationState.resources} 
+                  culturalValues={simulationState.culturalValues}
+                  world={simulationState.world}
               />
             </div>
           </GlassmorphismModal>
-
           <GlassmorphismModal 
             isOpen={isEventsPanelOpen} 
             onClose={() => setEventsPanelOpen(false)} 
             title="Log Peristiwa"
           >
             <div className="max-h-[60vh] overflow-y-auto pr-2">
-                <EventLog events={state.events} />
+                <EventLog events={simulationState.events} />
             </div>
           </GlassmorphismModal>
-
           <GlassmorphismModal 
             isOpen={!!selectedAgent} 
             onClose={handleCloseAgentModal} 
@@ -125,12 +160,14 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Tampilan error global */}
       {error && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75">
           <div className="text-center p-8 text-red-400 bg-slate-800 rounded-lg border border-red-500/50">
-            <h2 className="text-xl font-bold mb-2">Terjadi Kesalahan Kritis</h2>
+            <h2 className="text-xl font-bold mb-2">Terjadi Kesalahan Kritis Saat Startup</h2>
             <p>{error}</p>
+             <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-sky-600 text-white rounded hover:bg-sky-500">
+                Muat Ulang Aplikasi
+            </button>
           </div>
         </div>
       )}

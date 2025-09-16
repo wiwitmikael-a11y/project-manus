@@ -1,12 +1,10 @@
 import React from 'react';
-import { ColonyResources, CulturalValues, Biome, Structure, Creature } from '../types';
+import { ColonyResources, CulturalValues, Biome, Structure, Creature, WorldData } from '../types';
 
 interface ColonyInfoPanelProps {
     resources: ColonyResources;
     culturalValues: CulturalValues;
-    biomes: Biome[];
-    structures: Structure[];
-    creatures: Creature[];
+    world: WorldData;
 }
 
 const StatDisplay: React.FC<{ label: string; value: string | number; icon: string }> = ({ label, value, icon }) => (
@@ -19,7 +17,7 @@ const StatDisplay: React.FC<{ label: string; value: string | number; icon: strin
     </div>
 );
 
-const WorldElementList: React.FC<{ title: string; items: (Biome | Structure | Creature)[]; icon: string }> = ({ title, items, icon }) => (
+const WorldElementList: React.FC<{ title: string; items: (Biome | Structure | Creature)[]; icon:string }> = ({ title, items, icon }) => (
     <div>
         <h4 className="font-semibold text-slate-200 mb-2 mt-4 flex items-center">
             <span className="text-lg mr-2">{icon}</span>
@@ -38,7 +36,7 @@ const WorldElementList: React.FC<{ title: string; items: (Biome | Structure | Cr
 );
 
 
-const ColonyInfoPanel: React.FC<ColonyInfoPanelProps> = ({ resources, culturalValues, biomes, structures, creatures }) => {
+const ColonyInfoPanel: React.FC<ColonyInfoPanelProps> = ({ resources, culturalValues, world }) => {
     return (
         <div className="space-y-4">
              <div>
@@ -60,9 +58,9 @@ const ColonyInfoPanel: React.FC<ColonyInfoPanelProps> = ({ resources, culturalVa
             </div>
 
             <div className="pt-2 border-t border-slate-700/50">
-                <WorldElementList title="Known Biomes" items={biomes} icon="🗺️" />
-                <WorldElementList title="Colony Structures" items={structures} icon="🏕️" />
-                <WorldElementList title="Local Fauna" items={creatures} icon="🐾" />
+                <WorldElementList title="Known Biomes" items={world.biomes} icon="🗺️" />
+                <WorldElementList title="Colony Structures" items={world.structures} icon="🏕️" />
+                <WorldElementList title="Local Fauna" items={world.creatures} icon="🐾" />
             </div>
         </div>
     );

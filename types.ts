@@ -1,10 +1,10 @@
-// Fix: Replace TypeScript enum with a const object for JavaScript compatibility in the worker.
+// types.ts
+
 export const GameEventType = {
   NARRATIVE: 'NARRATIVE',
   AGENT: 'AGENT',
   SYSTEM: 'SYSTEM',
 } as const;
-
 export type GameEventType = typeof GameEventType[keyof typeof GameEventType];
 
 export interface GameEvent {
@@ -28,20 +28,36 @@ export interface Skills {
   crafting: number;
 }
 
+export type AgentDirection = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW';
+
+/**
+ * Mendefinisikan komposisi visual seorang agen.
+ * Untuk sistem full-body, ini hanya menunjuk ke spritesheet yang digunakan.
+ */
+export interface AgentAppearance {
+  spritesheet: string; // Kunci untuk spritesheet di assetMapping
+}
+
 export interface Agent {
   id: string;
   name: string;
+  gender: 'male' | 'female';
   task: string;
   mood: number;
   hunger: number;
   personality: Personality;
   skills: Skills;
-  relationships: Record<string, number>; // Affinity score with other agents by ID
+  relationships: Record<string, number>;
   x: number;
   y: number;
   targetX: number;
   targetY: number;
   isMoving: boolean;
+  appearance: AgentAppearance;
+  direction: AgentDirection;
+  animationState: 'idle' | 'walk';
+  animationFrame: number;
+  animationTick: number; // Counter untuk mengontrol kecepatan animasi
 }
 
 export interface ColonyResources {
@@ -76,38 +92,32 @@ export interface Creature {
   temperament: 'DOCILE' | 'NEUTRAL' | 'HOSTILE';
 }
 
+export interface WorldData {
+  biomes: Biome[];
+  structures: Structure[];
+  creatures: Creature[];
+  width: number;
+  height: number;
+}
+
+// Single source of truth for the entire simulation
 export interface SimulationState {
   agents: Agent[];
   resources: ColonyResources;
   culturalValues: CulturalValues;
   events: GameEvent[];
+  world: WorldData;
   day: number;
+  tick: number; // Ticks within the current day
   isPaused: boolean;
-  biomes: Biome[];
-  structures: Structure[];
-  creatures: Creature[];
 }
 
 // The data structure returned by the AI for world genesis
 export interface GenesisData {
-  agents: Omit<Agent, 'x' | 'y' | 'targetX' | 'targetY' | 'isMoving' | 'relationships'>[];
-  startingEvent: Omit<GameEvent, 'id' | 'timestamp'>;
+  agents: Agent[];
+  startingEvent: GameEvent;
   culturalValues: CulturalValues;
   biomes: Biome[];
   structures: Structure[];
   creatures: Creature[];
-}
-
-// Lightweight types for efficient worker communication
-export interface AgentVitals {
-    id: string;
-    x: number;
-    y: number;
-    isMoving: boolean;
-}
-
-export interface ColonyStats {
-    resources: ColonyResources;
-    culturalValues: CulturalValues;
-    day: number;
 }
