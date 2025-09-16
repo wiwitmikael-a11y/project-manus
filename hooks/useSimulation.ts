@@ -1,71 +1,36 @@
-// Fix: Implement the useSimulation custom hook to manage simulation state via a web worker.
 import { useState, useEffect, useRef, useCallback } from 'react';
-// Fix: Added .ts extension to resolve module import error.
 import { SimulationState } from '../types.ts';
 
-export function useSimulation(initialState: SimulationState) {
-  const [simulationState, setSimulationState] = useState<SimulationState>(initialState);
+export const useSimulation = (initialState: SimulationState) => {
+  const [simulationState, setSimulationState] = useState<SimulationState | null>(null);
   const workerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
-    let objectUrl: string | null = null;
+    // Create and initialize the worker. 
+    // The { type: 'module' } is important for Vite and modern bundlers.
+    workerRef.current = new Worker(new URL('../simulation.worker.ts', import.meta.url), { type: 'module' });
 
-    // This async function fetches the worker script and creates a worker from a Blob URL.
-    // This is a robust workaround for "SecurityError: The operation is insecure," which can happen
-    // in sandboxed environments or when worker paths are restricted by security policies.
-    const createWorkerFromBlob = async () => {
-      try {
-        const response = await fetch('/simulation.worker.ts');
-        if (!response.ok) {
-          throw new Error(`Failed to fetch worker script: ${response.statusText}`);
-        }
-        const scriptContent = await response.text();
-        const blob = new Blob([scriptContent], { type: 'application/javascript' });
-        objectUrl = URL.createObjectURL(blob);
-        
-        const worker = new Worker(objectUrl, { type: 'module' });
-        workerRef.current = worker;
-
-        worker.postMessage({ type: 'start', payload: initialState });
-        
-        worker.onmessage = (e: MessageEvent<SimulationState>) => {
-          setSimulationState(e.data);
-        };
-      } catch (error) {
-        console.error("Failed to create simulation worker:", error);
+    // Handle messages from the worker (e.g., state updates)
+    workerRef.current.onmessage = (event: MessageEvent) => {
+      const { type, payload } = event.data;
+      if (type === 'stateUpdate') {
+        setSimulationState(payload);
       }
     };
 
-    createWorkerFromBlob();
+    // Send the initial state to the worker to kick things off
+    workerRef.current.postMessage({ type: 'init', payload: initialState });
 
-    // Cleanup function to terminate the worker and revoke the blob URL
+    // Cleanup: Terminate the worker when the component unmounts
     return () => {
-      if (workerRef.current) {
-        workerRef.current.terminate();
-        workerRef.current = null;
-      }
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
+      workerRef.current?.postMessage({ type: 'stop' });
+      workerRef.current?.terminate();
     };
-  }, [initialState]);
+  }, [initialState]); // The hook re-initializes if the initial state prop ever changes
 
   const togglePause = useCallback(() => {
-    if (workerRef.current) {
-      const nextPausedState = !simulationState.isPaused;
-      
-      setSimulationState(prevState => ({ ...prevState, isPaused: nextPausedState }));
+    workerRef.current?.postMessage({ type: 'togglePause' });
+  }, []);
 
-      if (nextPausedState) {
-        workerRef.current.postMessage({ type: 'pause' });
-      } else {
-        workerRef.current.postMessage({ type: 'resume' });
-      }
-    }
-  }, [simulationState.isPaused]);
-  
-  return {
-    simulationState,
-    togglePause,
-  };
-}
+  return { simulationState, togglePause };
+};

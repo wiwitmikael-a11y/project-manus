@@ -1,37 +1,30 @@
-// assets/resourceAssetMapping.ts
-// Fix: Added .ts extension to resolve module import error.
-import { ResourceNodeType } from '../types.ts';
 
-interface ResourceSpriteData {
-    sx: number; // Source X in the atlas
-    sy: number; // Source Y in the atlas
+// Fix: Implemented the resource asset mapping.
+export interface AtlasMapping {
+    url: string;
+    nodes: {
+        [key: string]: { x: number, y: number, w: number, h: number }
+    },
+    containers: {
+        [key: string]: { x: number, y: number, w: number, h: number }
+    }
 }
 
-export interface ResourceMapping {
-  url: string;
-  tileSize: number;
-  nodes: Record<ResourceNodeType, ResourceSpriteData>;
-}
+// All coordinates are in pixels on the source image.
+const RESOURCE_ATLAS_URL = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus-assets/main/Resources_Atlas_01.png';
 
-// All assets are currently sourced from the main terrain atlas.
-const RESOURCE_ATLAS_URL = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus-assets/main/Terrain_Atlas_01.png';
-const TILE_SIZE = 128;
-
-export const resourceMapping: ResourceMapping = {
-  url: RESOURCE_ATLAS_URL,
-  tileSize: TILE_SIZE,
-  nodes: {
-    // R7C3 -> Tanah coklat kering + tumpukan kayu kecil (Tile ID 50)
-    // This tile visually represents a fallen tree or wood debris well.
-    'fallen_tree': {
-        sx: (50 % 8) * TILE_SIZE, // Column 2
-        sy: Math.floor(50 / 8) * TILE_SIZE, // Row 6
+export const resourceMapping: AtlasMapping = {
+    url: RESOURCE_ATLAS_URL,
+    nodes: {
+        // Defines the area on the atlas for a fallen tree.
+        'fallen_tree': { x: 0, y: 0, w: 128, h: 128 },
+        // Defines the area for a scrap pile.
+        'scrap_pile': { x: 128, y: 0, w: 128, h: 128 },
     },
-    // R2C8 -> Tanah coklat + bongkahan batu putih (Tile ID 15)
-    // This tile with a rock pile represents a scrap pile effectively.
-    'scrap_pile': {
-        sx: (15 % 8) * TILE_SIZE, // Column 7
-        sy: Math.floor(15 / 8) * TILE_SIZE, // Row 1
-    },
-  },
+    containers: {
+        // Defines the area for a ruined car.
+        'ruined_car': { x: 256, y: 0, w: 128, h: 128 },
+         // Defines the area for a pile of debris that can be looted.
+        'debris_pile': { x: 384, y: 0, w: 128, h: 128 },
+    }
 };

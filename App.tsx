@@ -1,7 +1,9 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
-import WelcomeScreen from './components/WelcomeScreen';
-import LoadingScreen from './components/LoadingScreen';
-import SimulationDashboard from './components/SimulationDashboard';
+// Fix: Added .tsx extensions to component imports to resolve module loading errors.
+import WelcomeScreen from './components/WelcomeScreen.tsx';
+import LoadingScreen from './components/LoadingScreen.tsx';
+import SimulationDashboard from './components/SimulationDashboard.tsx';
 import { generateWorldElements } from './services/geminiService.ts';
 import { SimulationState, Agent, Gender, GameEvent, GameEventType } from './types.ts';
 import { generateMarkovName } from './services/markovService.ts';

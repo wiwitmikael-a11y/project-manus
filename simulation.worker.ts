@@ -1,67 +1,59 @@
 // simulation.worker.ts
-// Fix: Added .ts extension to resolve module import error.
-import { runSimulationTick } from './simulation/simulationEngine.ts';
-// Fix: Added .ts extension to resolve module import error.
-import { runColonyAI } from './simulation/colonyAI.ts';
-// Fix: Added .ts extension to resolve module import error.
 import { SimulationState } from './types.ts';
-import { generateMap, spawnResourceNodes, spawnLootContainers } from './services/mapGenerationService';
+import { tick } from './simulation/simulationEngine.ts';
+import { generateMap, spawnResourceNodes, spawnLootContainers } from './services/mapGenerationService.ts';
 
 let simulationState: SimulationState | null = null;
 let intervalId: number | null = null;
-const TICK_RATE_MS = 100; // 10 ticks per second
 
-self.onmessage = (e: MessageEvent<{ type: string; payload?: any }>) => {
-  const { type, payload } = e.data;
+const SIMULATION_SPEED_MS = 50; // Each tick is 50ms, so ~20 ticks/sec
+
+function runSimulation() {
+  if (simulationState && !simulationState.isPaused) {
+    simulationState = tick(simulationState);
+    // Post the updated state back to the main thread
+    self.postMessage({ type: 'stateUpdate', payload: simulationState });
+  }
+}
+
+self.onmessage = (event: MessageEvent) => {
+  const { type, payload } = event.data;
 
   switch (type) {
-    case 'start':
-      simulationState = payload as SimulationState;
-      // Generate the world map and resource nodes when the simulation starts
+    case 'init':
+      simulationState = payload;
+      
+      // Perform heavy initialization tasks within the worker
       if (simulationState) {
-        simulationState.world.tileMap = generateMap(simulationState.world.width, simulationState.world.height);
-        simulationState.world.resourceNodes = spawnResourceNodes(simulationState.world.tileMap, 20); // Tambah 20 node sumber daya
-        simulationState.world.lootContainers = spawnLootContainers(simulationState.world.tileMap, 15);
-        simulationState.world.placedStructures = [];
+          simulationState.world.tileMap = generateMap(simulationState.world.width, simulationState.world.height);
+          simulationState.world.resourceNodes = spawnResourceNodes(simulationState.world.tileMap, 30);
+          simulationState.world.lootContainers = spawnLootContainers(simulationState.world.tileMap, 10);
       }
-      if (simulationState && !simulationState.isPaused) {
-        startSimulation();
+
+      // Send the fully initialized state back once
+      self.postMessage({ type: 'stateUpdate', payload: simulationState });
+      
+      // Start the simulation loop
+      if (intervalId) clearInterval(intervalId);
+      intervalId = self.setInterval(runSimulation, SIMULATION_SPEED_MS);
+      break;
+
+    case 'togglePause':
+      if (simulationState) {
+        simulationState.isPaused = !simulationState.isPaused;
+        // Immediately notify main thread of pause state change
+        self.postMessage({ type: 'stateUpdate', payload: simulationState });
       }
       break;
-    case 'pause':
-      stopSimulation();
-      if (simulationState) {
-          simulationState.isPaused = true;
+
+    case 'stop':
+      if (intervalId) {
+        self.clearInterval(intervalId);
+        intervalId = null;
       }
       break;
-    case 'resume':
-      if (simulationState) {
-        simulationState.isPaused = false;
-        startSimulation();
-      }
-      break;
-    // Menghapus case 'place_structure' karena sekarang ditangani oleh AI
+
+    default:
+      console.warn('Unknown message type received in worker:', type);
   }
 };
-
-function startSimulation() {
-  if (intervalId !== null) return; // Already running
-  
-  intervalId = self.setInterval(() => {
-    if (simulationState) {
-      // Jalankan AI Perencana Koloni secara berkala (misal, setiap jam dalam game)
-      if (simulationState.tick === 0) {
-        simulationState = runColonyAI(simulationState);
-      }
-      simulationState = runSimulationTick(simulationState);
-      self.postMessage(simulationState);
-    }
-  }, TICK_RATE_MS);
-}
-
-function stopSimulation() {
-  if (intervalId !== null) {
-    self.clearInterval(intervalId);
-    intervalId = null;
-  }
-}

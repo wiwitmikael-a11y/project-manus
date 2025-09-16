@@ -1,86 +1,82 @@
-// simulation/simulationEngine.ts
-// Fix: Added .ts extension to resolve module import error.
 import { SimulationState, Agent } from '../types.ts';
+import { runColonyAI } from './colonyAI.ts';
 
-const AGENT_SPEED = 0.1; // tiles per tick
+const COLONY_AI_TICK_INTERVAL = 100; // Run colony AI every 100 ticks (5 seconds)
 
-function updateAgent(agent: Agent, state: SimulationState): Agent {
-  let newAgent = { ...agent };
-  newAgent.state_timer -= 1;
+/**
+ * The main simulation tick function.
+ * This is the heart of the simulation, updating the state of all agents and the world.
+ * @param state The current simulation state.
+ * @returns The new simulation state after one tick.
+ */
+export function tick(state: SimulationState): SimulationState {
+    let newState = { ...state, tick: state.tick + 1 };
 
-  // State machine for agent behavior
-  switch (newAgent.state) {
-    case 'idle':
-      if (newAgent.state_timer <= 0) {
-        // Find a random destination to wander to
-        const destX = newAgent.x + (Math.random() - 0.5) * 20;
-        const destY = newAgent.y + (Math.random() - 0.5) * 20;
-        newAgent.destination = { x: destX, y: destY };
-        newAgent.state = 'moving';
-      }
-      break;
-
-    case 'moving':
-      if (!newAgent.destination) {
-        newAgent.state = 'idle';
-        newAgent.state_timer = Math.random() * 200 + 50; // idle for 5-25 seconds
-        break;
-      }
-      
-      const dx = newAgent.destination.x - newAgent.x;
-      const dy = newAgent.destination.y - newAgent.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (distance < 1) {
-        newAgent.destination = null;
-        newAgent.state = 'idle';
-        newAgent.state_timer = Math.random() * 200 + 50;
-      } else {
-        newAgent.x += (dx / distance) * AGENT_SPEED;
-        newAgent.y += (dy / distance) * AGENT_SPEED;
-        
-        // Clamp to world bounds
-        newAgent.x = Math.max(0, Math.min(state.world.width - 1, newAgent.x));
-        newAgent.y = Math.max(0, Math.min(state.world.height - 1, newAgent.y));
-      }
-      break;
+    // Update all agents
+    newState.agents = newState.agents.map(agent => updateAgent(agent, newState));
     
-    // TODO: Implement 'working' state logic (gathering, building, etc.)
-    case 'working':
-      // Placeholder: after some time, go back to idle.
-      if (newAgent.state_timer <= 0) {
-        newAgent.state = 'idle';
-        newAgent.state_timer = Math.random() * 100;
-      }
-      break;
-  }
-
-  return newAgent;
+    // Run high-level colony AI periodically for performance
+    if (newState.tick % COLONY_AI_TICK_INTERVAL === 0) {
+        newState = runColonyAI(newState);
+    }
+    
+    // Future logic can be added here:
+    // - Resource consumption (e.g., agents eating food)
+    // - Environmental events
+    // - Building progress updates
+    
+    return newState;
 }
 
 /**
- * Runs one tick of the simulation.
+ * Updates a single agent's state for one tick.
+ * @param agent The agent to update.
  * @param state The current simulation state.
- * @returns The new simulation state after the tick.
+ * @returns The updated agent.
  */
-export function runSimulationTick(state: SimulationState): SimulationState {
-  const newState = { ...state };
-  newState.tick += 1;
+function updateAgent(agent: Agent, state: SimulationState): Agent {
+    let newAgent = { ...agent };
 
-  // Update agents
-  newState.agents = newState.agents.map(agent => updateAgent(agent, newState));
+    // Decrement state timer
+    if (newAgent.state_timer > 0) {
+      newAgent.state_timer -= 1;
+    }
 
-  // Update resources (example: passive food consumption)
-  if (newState.tick % 100 === 0) { // Every 10 seconds
-    newState.resources.food -= newState.agents.length * 0.1;
-    if (newState.resources.food < 0) newState.resources.food = 0;
-  }
-  
-  // Update research points if a project is active
-  const researchBench = newState.world.placedStructures.find(s => s.blueprintId === 'research_bench_1' && s.isComplete);
-  if (newState.activeResearchId && researchBench) {
-      newState.resources.researchPoints += 0.1; // Gain 0.1 RP per tick
-  }
+    // Simple Finite State Machine (FSM) for agent behavior
+    if (newAgent.state_timer <= 0) {
+        // Simple AI: Wander around. A real implementation would use a behavior tree or goal-oriented system.
+        const shouldWander = Math.random() > 0.2;
+        if (shouldWander && newAgent.state === 'idle') {
+            newAgent.state = 'walking';
+            const destX = Math.max(0, Math.min(state.world.width - 1, newAgent.x + (Math.random() - 0.5) * 10));
+            const destY = Math.max(0, Math.min(state.world.height - 1, newAgent.y + (Math.random() - 0.5) * 10));
+            newAgent.destination = { x: destX, y: destY };
+            newAgent.state_timer = 1000; // Give it plenty of time to get there
+        } else {
+            newAgent.state = 'idle';
+            newAgent.destination = null;
+            newAgent.state_timer = Math.random() * 200 + 50; // idle for 2.5-12.5 seconds
+        }
+    }
 
-  return newState;
+    // Movement logic for walking agents
+    if (newAgent.state === 'walking' && newAgent.destination) {
+        const dx = newAgent.destination.x - newAgent.x;
+        const dy = newAgent.destination.y - newAgent.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 0.1) {
+            // Arrived at destination
+            newAgent.state = 'idle';
+            newAgent.destination = null;
+            newAgent.state_timer = Math.random() * 100 + 50;
+        } else {
+            // Move towards destination
+            const moveSpeed = 0.05; // tiles per tick
+            newAgent.x += (dx / dist) * moveSpeed;
+            newAgent.y += (dy / dist) * moveSpeed;
+        }
+    }
+    
+    return newAgent;
 }
