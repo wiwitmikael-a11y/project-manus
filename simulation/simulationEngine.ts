@@ -1,94 +1,104 @@
+
 // simulation/simulationEngine.ts
+// Fix: Added .ts extension to resolve module import error.
+import { SimulationState, Agent } from '../types.ts';
+// Fix: Added .ts extension to resolve module import error.
+import { spritesheetMapping } from '../assets/assetMapping.ts';
 
-// FIX: Import Agent type to correctly type agent objects within the simulation engine.
-import { SimulationState, TimeOfDay, Agent } from '../types.ts';
+const AGENT_SPEED = 0.05; // Tiles per tick
+const TICKS_PER_HOUR = 600; // 10 ticks/sec * 60 seconds = 600 ticks. 1 minute real-time = 1 hour game-time.
 
-const TICKS_PER_HOUR = 60; // e.g., 60 ticks is one game hour
-const HOURS_PER_DAY = 24;
+function updateAgent(agent: Agent, state: SimulationState): Agent {
+  let newAgent = { ...agent };
 
-/**
- * Updates the game clock.
- * @param state The current simulation state.
- * @returns The updated simulation state.
- */
+  // --- Animation ---
+  newAgent.animationTick = (newAgent.animationTick + 1);
+  
+  const animData = spritesheetMapping[newAgent.spritesheetKey].animations[newAgent.animationState];
+  if (animData && newAgent.animationTick >= animData.speed) {
+    newAgent.animationTick = 0;
+    newAgent.animationFrame = (newAgent.animationFrame + 1) % animData.frames;
+  }
+
+  // --- Movement ---
+  if (newAgent.isMoving) {
+    const dx = newAgent.targetX - newAgent.x;
+    const dy = newAgent.targetY - newAgent.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance < AGENT_SPEED) {
+      newAgent.x = newAgent.targetX;
+      newAgent.y = newAgent.targetY;
+      newAgent.isMoving = false;
+      newAgent.animationState = 'idle';
+      newAgent.animationFrame = 0;
+      newAgent.animationTick = 0;
+    } else {
+      const angle = Math.atan2(dy, dx);
+      newAgent.x += Math.cos(angle) * AGENT_SPEED;
+      newAgent.y += Math.sin(angle) * AGENT_SPEED;
+      newAgent.direction = angle;
+      newAgent.animationState = 'walk';
+    }
+  } else {
+    // --- Simple AI: Wander around ---
+    if (Math.random() < 0.005) { // Low chance each tick to start wandering
+      newAgent.isMoving = true;
+      const wanderDistance = Math.random() * 5 + 2;
+      const wanderAngle = Math.random() * Math.PI * 2;
+      newAgent.targetX = Math.max(0, Math.min(state.world.width, newAgent.x + Math.cos(wanderAngle) * wanderDistance));
+      newAgent.targetY = Math.max(0, Math.min(state.world.height, newAgent.y + Math.sin(wanderAngle) * wanderDistance));
+    }
+  }
+
+  return newAgent;
+}
+
 function updateTime(state: SimulationState): SimulationState {
     const newState = { ...state };
-    newState.tick = (newState.tick + 1) % TICKS_PER_HOUR;
+    newState.tick += 1;
 
-    if (newState.tick === 0) {
-        newState.hour = (newState.hour + 1);
-        if (newState.hour >= HOURS_PER_DAY) {
-            newState.hour = 0;
-            newState.day += 1;
-        }
+    if (newState.tick >= TICKS_PER_HOUR) {
+        newState.tick = 0;
+        newState.hour += 1;
+        
+        // --- Resource Consumption (per hour) ---
+        const foodConsumption = newState.agents.length * 0.1;
+        newState.resources = {
+            ...newState.resources,
+            food: Math.max(0, newState.resources.food - foodConsumption)
+        };
     }
     
-    // Determine Time of Day
-    if (newState.hour >= 6 && newState.hour < 20) {
-        newState.timeOfDay = 'day';
-    } else {
+    if (newState.hour >= 24) {
+        newState.hour = 0;
+        newState.day += 1;
+    }
+
+    if (newState.hour >= 20 || newState.hour < 6) {
         newState.timeOfDay = 'night';
+    } else {
+        newState.timeOfDay = 'day';
     }
 
     return newState;
 }
 
-/**
- * Updates the position of all agents.
- * @param state The current simulation state.
- * @returns The updated simulation state.
- */
-function updateAgentMovement(state: SimulationState): SimulationState {
-    const AGENT_SPEED = 0.05; // tiles per tick
 
-    // FIX: Add a return type annotation to the map callback to ensure returned objects conform to the Agent type.
-    const newAgents = state.agents.map((agent): Agent => {
-        if (!agent.isMoving) {
-            // Simple random walk for now when idle
-            if (Math.random() < 0.01) { // 1% chance to start moving
-                 return {
-                    ...agent,
-                    isMoving: true,
-                    targetX: agent.x + (Math.random() - 0.5) * 5,
-                    targetY: agent.y + (Math.random() - 0.5) * 5,
-                    animationState: 'walk',
-                 };
-            }
-            return agent;
-        }
-
-        const dx = agent.targetX - agent.x;
-        const dy = agent.targetY - agent.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (distance < AGENT_SPEED) {
-            return { ...agent, x: agent.targetX, y: agent.targetY, isMoving: false, animationState: 'idle' };
-        }
-
-        const newX = agent.x + (dx / distance) * AGENT_SPEED;
-        const newY = agent.y + (dy / distance) * AGENT_SPEED;
-        const newDirection = Math.atan2(dy, dx);
-
-        return { ...agent, x: newX, y: newY, direction: newDirection };
-    });
-
-    return { ...state, agents: newAgents };
-}
-
-/**
- * Runs a single tick of the simulation.
- * @param state The current simulation state.
- * @returns The new simulation state after one tick.
- */
 export function runSimulationTick(state: SimulationState): SimulationState {
-    if (state.isPaused) {
-        return state;
-    }
+  if (state.isPaused) {
+    return state;
+  }
 
-    let newState = { ...state };
-    newState = updateTime(newState);
-    newState = updateAgentMovement(newState);
-    // Other systems like resource consumption, agent needs, etc. would go here.
+  // Deep copy agents array for modification
+  const updatedAgents = state.agents.map(agent => updateAgent(agent, state));
+  
+  let newState: SimulationState = {
+    ...state,
+    agents: updatedAgents,
+  };
 
-    return newState;
+  newState = updateTime(newState);
+  
+  return newState;
 }
