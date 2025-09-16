@@ -14,7 +14,7 @@ export interface ResourceMapping {
 }
 
 // All assets are currently sourced from the main terrain atlas.
-const RESOURCE_ATLAS_URL = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus-assets/main/png/Terrain_Atlas_01.png';
+const RESOURCE_ATLAS_URL = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus-assets/main/Terrain_Atlas_01.png';
 const TILE_SIZE = 128;
 
 export const resourceMapping: ResourceMapping = {

@@ -6,8 +6,8 @@
  */
 
 // --- SUMBER ASET ---
-const MALE_COLONIST_ATLAS_URL = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus-assets/main/png/Male_01.png';
-const FEMALE_COLONIST_ATLAS_URL = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus-assets/main/png/Female_01.png';
+const MALE_COLONIST_ATLAS_URL = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus-assets/main/Male_01.png';
+const FEMALE_COLONIST_ATLAS_URL = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus-assets/main/Female_01.png';
 
 
 // Arah yang didukung langsung di spritesheet. Arah lain akan di-flip.
