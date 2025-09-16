@@ -1,5 +1,6 @@
 // assets/resourceAssetMapping.ts
-import { ResourceNodeType } from '../types';
+// Fix: Added .ts extension to resolve module import error.
+import { ResourceNodeType } from '../types.ts';
 
 interface ResourceSpriteData {
     sx: number; // Source X in the atlas

@@ -1,7 +1,8 @@
 // Fix: Implement the CommandBar component with UI controls.
 import React from 'react';
-import { Agent } from '../types';
-import { PlayIcon, PauseIcon, ColonyIcon, EventsIcon } from './common/Icons';
+// Fix: Added .ts extension to resolve module import error.
+import { Agent } from '../types.ts';
+import { PlayIcon, PauseIcon, ColonyIcon, EventsIcon, ResearchIcon } from './common/Icons';
 
 interface CommandBarProps {
   isPaused: boolean;
@@ -10,6 +11,7 @@ interface CommandBarProps {
   onTogglePause: () => void;
   onColonyClick: () => void;
   onEventsClick: () => void;
+  onResearchClick: () => void;
   onSelectAgent: (agent: Agent | null) => void;
 }
 
@@ -34,7 +36,7 @@ const AgentButton: React.FC<{ agent: Agent; onClick: () => void; isSelected: boo
 );
 
 
-const CommandBar: React.FC<CommandBarProps> = ({ isPaused, agents, selectedAgent, onTogglePause, onColonyClick, onEventsClick, onSelectAgent }) => {
+const CommandBar: React.FC<CommandBarProps> = ({ isPaused, agents, selectedAgent, onTogglePause, onColonyClick, onEventsClick, onResearchClick, onSelectAgent }) => {
   return (
     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
         <div className="flex items-center gap-3 p-2 bg-slate-800/50 backdrop-blur-lg border border-slate-600/50 rounded-full shadow-lg">
@@ -47,6 +49,13 @@ const CommandBar: React.FC<CommandBarProps> = ({ isPaused, agents, selectedAgent
             </CommandBarButton>
             <CommandBarButton onClick={onEventsClick} aria-label="Open Event Log">
                 <EventsIcon className="h-6 w-6" />
+            </CommandBarButton>
+            
+            <div className="w-px h-8 bg-slate-600/50"></div>
+
+            {/* Tombol Build dihapus, diganti tombol Research */}
+            <CommandBarButton onClick={onResearchClick} aria-label="Open Research Tree">
+                <ResearchIcon className="h-6 w-6" />
             </CommandBarButton>
 
             {/* Agent Selector */}

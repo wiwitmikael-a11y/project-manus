@@ -1,176 +1,132 @@
+// components/GameCanvas.tsx
 import React, { useRef, useEffect } from 'react';
-import { SimulationState, Agent, AgentDirection, ResourceNode } from '../types';
+import { SimulationState, Agent } from '../types.ts';
 import { assetLoader } from '../assets';
 import { spritesheetMapping } from '../assets/assetMapping';
 import { terrainMapping } from '../assets/terrainAssetMapping';
 import { resourceMapping } from '../assets/resourceAssetMapping';
 
 export interface Camera {
-  x: number;
-  y: number;
-  zoom: number;
-  targetX?: number;
-  targetY?: number;
+    x: number;
+    y: number;
+    zoom: number;
+    targetX?: number;
+    targetY?: number;
 }
 
 interface GameCanvasProps {
-  simulationState: SimulationState;
-  cameraState: Camera;
-  setCamera: React.Dispatch<React.SetStateAction<Camera>>;
-  selectedAgent: Agent | null;
-  onAgentClick: (agent: Agent) => void;
+    simulationState: SimulationState;
+    cameraState: Camera;
+    setCamera: React.Dispatch<React.SetStateAction<Camera>>;
+    selectedAgent: Agent | null;
+    onAgentClick: (agent: Agent) => void;
 }
 
-const TILE_WIDTH = 128;
-const TILE_HEIGHT = 64;
-const TILE_WIDTH_HALF = TILE_WIDTH / 2;
-const TILE_HEIGHT_HALF = TILE_HEIGHT / 2;
-
-const worldToIso = (x: number, y: number): { isoX: number; isoY: number } => {
-  const isoX = (x - y) * TILE_WIDTH_HALF;
-  const isoY = (x + y) * TILE_HEIGHT_HALF;
-  return { isoX, isoY };
-};
-
-type RenderableObject = (Agent | ResourceNode) & { renderType: 'agent' | 'node' };
+// A simple lerp function for smooth camera movement
+const lerp = (start: number, end: number, amt: number) => (1 - amt) * start + amt * end;
 
 const GameCanvas: React.FC<GameCanvasProps> = ({ simulationState, cameraState, setCamera, selectedAgent, onAgentClick }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas || !assetLoader.loaded) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
 
-    let animationFrameId: number;
-    const TERRAIN_ATLAS = assetLoader.getImage('terrain_atlas');
-    const RESOURCE_ATLAS = assetLoader.getImage('resource_atlas');
+        let animationFrameId: number;
 
-    const draw = () => {
-        const { agents, world, timeOfDay } = simulationState;
-        const { tileMap, width: worldWidth, height: worldHeight, resourceNodes } = world;
-
-        if (cameraState.targetX !== undefined && cameraState.targetY !== undefined) {
-             const targetIso = worldToIso(cameraState.targetX, cameraState.targetY);
-             cameraState.x += (targetIso.isoX - cameraState.x) * 0.1;
-             cameraState.y += (targetIso.isoY - cameraState.y) * 0.1;
-        }
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.save();
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.scale(cameraState.zoom, cameraState.zoom);
-        ctx.translate(-cameraState.x, -cameraState.y);
-
-        // --- Draw Terrain ---
-        if (tileMap && TERRAIN_ATLAS) {
-            const ATLAS_COLUMNS = 8; // The user-provided terrain atlas has 8 columns.
-            for (let y = 0; y < worldHeight; y++) {
-                for (let x = 0; x < worldWidth; x++) {
-                    const tileId = tileMap[y][x];
-                    const { isoX, isoY } = worldToIso(x, y);
-                    const sourceX = (tileId % ATLAS_COLUMNS) * terrainMapping.tileSize;
-                    const sourceY = Math.floor(tileId / ATLAS_COLUMNS) * terrainMapping.tileSize;
-                    ctx.drawImage(TERRAIN_ATLAS, sourceX, sourceY, terrainMapping.tileSize, terrainMapping.tileSize, isoX, isoY - TILE_HEIGHT_HALF, TILE_WIDTH, TILE_WIDTH);
-                }
-            }
-        }
-
-        // --- Gabungkan dan Sortir Semua Objek Renderable ---
-        const renderableObjects: RenderableObject[] = [
-            ...agents.map(a => ({...a, renderType: 'agent' as const})),
-            ...resourceNodes.map(n => ({...n, renderType: 'node' as const}))
-        ];
-        renderableObjects.sort((a, b) => (a.y + a.x) - (b.y + b.x));
-
-        // --- Draw Objects (Agents and Resources) ---
-        renderableObjects.forEach(obj => {
-            const { isoX, isoY } = worldToIso(obj.x, obj.y);
-
-            if (obj.renderType === 'agent') {
-                const agent = obj as Agent;
-                const sheetData = spritesheetMapping[agent.appearance.spritesheet];
-                const AGENT_ATLAS = assetLoader.getImage(agent.appearance.spritesheet);
-                if (!sheetData || !AGENT_ATLAS) return;
-
-                const animData = sheetData.animations[agent.animationState];
-                const dirMap: Record<AgentDirection, 'N'|'NE'|'E'|'SE'|'S'> = { 'N': 'N', 'NE': 'NE', 'E': 'E', 'SE': 'SE', 'S': 'S', 'NW': 'NE', 'W': 'E', 'SW': 'SE' };
-                const row = animData.rows[dirMap[agent.direction]];
-                const flip = agent.direction === 'W' || agent.direction === 'NW' || agent.direction === 'SW';
-                const sx = agent.animationFrame * sheetData.frameSize;
-                const sy = row * sheetData.frameSize;
-                const drawX = isoX + TILE_WIDTH_HALF - sheetData.frameSize / 2;
-                const drawY = isoY - (sheetData.frameSize - TILE_HEIGHT_HALF);
-
-                ctx.save();
-                if (flip) {
-                    ctx.translate(drawX + sheetData.frameSize, drawY);
-                    ctx.scale(-1, 1);
+        const render = () => {
+            // Smooth camera update
+            let newCamX = cameraState.x;
+            let newCamY = cameraState.y;
+            if (cameraState.targetX !== undefined && cameraState.targetY !== undefined) {
+                newCamX = lerp(cameraState.x, cameraState.targetX, 0.1);
+                newCamY = lerp(cameraState.y, cameraState.targetY, 0.1);
+                if (Math.abs(newCamX - cameraState.targetX) < 0.1 && Math.abs(newCamY - cameraState.targetY) < 0.1) {
+                    setCamera(cam => ({ ...cam, x: cam.targetX!, y: cam.targetY!}));
                 } else {
-                    ctx.translate(drawX, drawY);
+                    setCamera(cam => ({ ...cam, x: newCamX, y: newCamY }));
                 }
-                ctx.drawImage(AGENT_ATLAS, sx, sy, sheetData.frameSize, sheetData.frameSize, 0, 0, sheetData.frameSize, sheetData.frameSize);
-                ctx.restore();
-
-                if (selectedAgent && selectedAgent.id === agent.id) {
-                    ctx.beginPath();
-                    ctx.ellipse(isoX + TILE_WIDTH_HALF, isoY + TILE_HEIGHT_HALF, TILE_WIDTH_HALF * 0.7, TILE_HEIGHT_HALF * 0.7, 0, 0, 2 * Math.PI);
-                    ctx.strokeStyle = '#f59e0b';
-                    ctx.lineWidth = 3 / cameraState.zoom;
-                    ctx.stroke();
-                }
-            } else if (obj.renderType === 'node' && RESOURCE_ATLAS) {
-                const node = obj as ResourceNode;
-                const mapping = resourceMapping.nodes[node.type];
-                if (!mapping) return;
-                const drawX = isoX + TILE_WIDTH_HALF - resourceMapping.tileSize / 2;
-                const drawY = isoY - (resourceMapping.tileSize - TILE_HEIGHT_HALF);
-                ctx.drawImage(RESOURCE_ATLAS, mapping.sx, mapping.sy, resourceMapping.tileSize, resourceMapping.tileSize, drawX, drawY, resourceMapping.tileSize, resourceMapping.tileSize);
             }
-        });
 
-        ctx.restore();
 
-        // --- Draw Day/Night Overlay ---
-        if (timeOfDay === 'night') {
-            ctx.fillStyle = 'rgba(10, 20, 50, 0.4)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
+            const { width, height } = canvas.getBoundingClientRect();
+            canvas.width = width;
+            canvas.height = height;
+            
+            ctx.save();
+            ctx.clearRect(0, 0, width, height);
 
-        animationFrameId = requestAnimationFrame(draw);
-    };
+            // Center camera and apply zoom
+            ctx.translate(width / 2, height / 2);
+            ctx.scale(cameraState.zoom, cameraState.zoom);
+            ctx.translate(-cameraState.x * 64, -cameraState.y * 64); // Assuming tile size is 64 for rendering
 
-    draw();
+            // --- START RENDERING ---
+            // 1. Render Terrain (placeholder)
+            if(simulationState.world.tileMap) {
+                const terrainAtlas = assetLoader.getImage('terrain_atlas');
+                if (terrainAtlas) {
+                    const TILE_SIZE = 64; // Render size
+                    const ATLAS_TILE_SIZE = terrainMapping.tileSize;
+                    simulationState.world.tileMap.forEach((row, y) => {
+                        row.forEach((tileId, x) => {
+                            const sx = (tileId % 8) * ATLAS_TILE_SIZE;
+                            const sy = Math.floor(tileId / 8) * ATLAS_TILE_SIZE;
+                            ctx.drawImage(terrainAtlas, sx, sy, ATLAS_TILE_SIZE, ATLAS_TILE_SIZE, x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        });
+                    });
+                }
+            }
 
-    const handleClick = (e: MouseEvent) => {
+
+            // 2. Render Agents (placeholder)
+            simulationState.agents.forEach(agent => {
+                ctx.fillStyle = agent.id === selectedAgent?.id ? 'yellow' : 'cyan';
+                ctx.beginPath();
+                ctx.arc(agent.x * 64, agent.y * 64, 16, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = 'black';
+                ctx.fillText(agent.name.charAt(0), agent.x * 64 - 4, agent.y * 64 + 4);
+            });
+            // --- END RENDERING ---
+
+            ctx.restore();
+            animationFrameId = requestAnimationFrame(render);
+        };
+
+        render();
+
+        return () => {
+            cancelAnimationFrame(animationFrameId);
+        };
+    }, [simulationState, cameraState, selectedAgent, setCamera]);
+
+    const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
         const rect = canvas.getBoundingClientRect();
-        const mouseX = (e.clientX - rect.left);
-        const mouseY = (e.clientY - rect.top);
-        const worldMouseX = (mouseX - canvas.width / 2) / cameraState.zoom + cameraState.x;
-        const worldMouseY = (mouseY - canvas.height / 2) / cameraState.zoom + cameraState.y;
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
 
-        let clickedAgent = null;
-        for (const agent of [...simulationState.agents].reverse()) {
-             const { isoX, isoY } = worldToIso(agent.x, agent.y);
-             const dist = Math.sqrt(Math.pow(worldMouseX - (isoX + TILE_WIDTH_HALF), 2) + Math.pow(worldMouseY - (isoY), 2));
-             if (dist < TILE_HEIGHT) {
-                 clickedAgent = agent;
-                 break;
-             }
+        // Convert screen coordinates to world coordinates
+        const worldX = (x - rect.width / 2) / cameraState.zoom + cameraState.x * 64;
+        const worldY = (y - rect.height / 2) / cameraState.zoom + cameraState.y * 64;
+        
+        // Find clicked agent
+        for (const agent of simulationState.agents) {
+            const dx = (agent.x * 64) - worldX;
+            const dy = (agent.y * 64) - worldY;
+            if (Math.sqrt(dx * dx + dy * dy) < 16) { // Check if click is within agent's radius
+                onAgentClick(agent);
+                return;
+            }
         }
-        if (clickedAgent) onAgentClick(clickedAgent);
     };
-    
-    canvas.addEventListener('click', handleClick);
 
-    return () => {
-        cancelAnimationFrame(animationFrameId);
-        canvas.removeEventListener('click', handleClick);
-    };
-  }, [simulationState, cameraState, setCamera, selectedAgent, onAgentClick]);
-
-  return <canvas ref={canvasRef} className="w-full h-full" width={window.innerWidth} height={window.innerHeight} />;
+    return <canvas ref={canvasRef} onClick={handleCanvasClick} className="w-full h-full bg-slate-800" />;
 };
 
 export default GameCanvas;

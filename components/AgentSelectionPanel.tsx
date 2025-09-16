@@ -1,8 +1,10 @@
 // Fix: Implement the AgentSelectionPanel component for detailed agent views.
 import React from 'react';
-import { Agent } from '../types';
+// Fix: Added .ts extension to resolve module import error.
+import { Agent } from '../types.ts';
 import GlassmorphismModal from './common/GlassmorphismModal';
-import AgentCard from './AgentCard';
+// Fix: Added .tsx extension to resolve module import error.
+import AgentCard from './AgentCard.tsx';
 
 interface AgentSelectionPanelProps {
   agent: Agent | null;

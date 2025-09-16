@@ -1,5 +1,6 @@
 import React from 'react';
-import { ColonyResources, CulturalValues, Biome, Structure, Creature, WorldData } from '../types';
+// Fix: Added .ts extension to resolve module import error.
+import { ColonyResources, CulturalValues, Biome, Structure, Creature, WorldData } from '../types.ts';
 
 interface ColonyInfoPanelProps {
     resources: ColonyResources;
@@ -45,6 +46,7 @@ const ColonyInfoPanel: React.FC<ColonyInfoPanelProps> = ({ resources, culturalVa
                     <StatDisplay label="Food" value={resources.food.toFixed(1)} icon="🍎" />
                     <StatDisplay label="Wood" value={resources.wood.toFixed(1)} icon="🌲" />
                     <StatDisplay label="Scrap" value={resources.scrap.toFixed(1)} icon="🔩" />
+                    <StatDisplay label="Research" value={resources.researchPoints.toFixed(1)} icon="🧪" />
                     <StatDisplay label="Stability" value={`${resources.stability.toFixed(1)}%`} icon="🛡️" />
                 </div>
             </div>

@@ -1,61 +1,41 @@
+// components/AgentCard.tsx
 import React from 'react';
-import { Agent } from '../types';
+import { Agent } from '../types.ts';
 
-const ProgressBar: React.FC<{ value: number; color: string }> = ({ value, color }) => (
-  <div className="w-full bg-slate-700 rounded-full h-2.5">
-    <div className={`${color} h-2.5 rounded-full`} style={{ width: `${value}%` }}></div>
-  </div>
-);
+interface AgentCardProps {
+  agent: Agent;
+}
 
-const TraitDisplay: React.FC<{ label: string; value: number; icon: string }> = ({ label, value, icon }) => (
-    <div className="flex items-center text-xs bg-slate-700/50 rounded-full px-2 py-1">
-        <span>{icon}</span>
-        <span className="ml-1.5 mr-2 text-slate-300">{label}</span>
-        <span className="font-mono font-semibold text-white">{value}</span>
+const StatBar: React.FC<{ label: string; value: number; max: number; color: string }> = ({ label, value, max, color }) => (
+    <div>
+        <div className="flex justify-between items-center text-xs mb-1">
+            <span className="font-semibold text-slate-300">{label}</span>
+            <span className="font-mono text-slate-400">{value.toFixed(0)} / {max}</span>
+        </div>
+        <div className="w-full bg-slate-700 rounded-full h-2">
+            <div className={`${color} h-2 rounded-full`} style={{ width: `${(value / max) * 100}%` }}></div>
+        </div>
     </div>
 );
 
-
-const AgentCard: React.FC<{ agent: Agent }> = ({ agent }) => {
-  const moodColor = agent.mood > 60 ? 'bg-green-500' : agent.mood > 30 ? 'bg-yellow-500' : 'bg-red-500';
-  const hungerColor = agent.hunger > 50 ? 'bg-red-500' : agent.hunger > 20 ? 'bg-yellow-500' : 'bg-green-500';
-
+const AgentCard: React.FC<AgentCardProps> = ({ agent }) => {
   return (
-    <div className="bg-slate-800 p-4 rounded-lg border border-slate-700 flex flex-col gap-3">
-      <div>
-        <h3 className="font-bold text-white">{agent.name}</h3>
-        <p className="text-sm text-slate-400 italic">Task: {agent.task}</p>
-      </div>
-
-      <div className="flex gap-2 flex-wrap">
-          <TraitDisplay label="Creative" value={agent.personality.creativity} icon="🎨" />
-          <TraitDisplay label="Pragmatic" value={agent.personality.pragmatism} icon="🛠️" />
-          <TraitDisplay label="Social" value={agent.personality.social} icon="💬" />
-      </div>
-      
-      <div className="space-y-2 text-sm">
-        <div>
-            <div className="flex justify-between items-center">
-              <span className="text-slate-300">Mood</span>
-              <span className="font-mono">{agent.mood.toFixed(0)}%</span>
+    <div className="bg-slate-800/50 backdrop-blur-sm p-4 rounded-lg border border-slate-700">
+        <div className="flex items-center space-x-4">
+            <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center text-3xl font-bold text-amber-400 border-2 border-slate-600">
+                {agent.name.charAt(0)}
             </div>
-            <ProgressBar value={agent.mood} color={moodColor} />
-        </div>
-
-        <div>
-            <div className="flex justify-between items-center">
-              <span className="text-slate-300">Hunger</span>
-              <span className="font-mono">{agent.hunger.toFixed(0)}%</span>
+            <div>
+                <h3 className="text-xl font-bold text-white">{agent.name}</h3>
+                <p className="text-sm text-slate-400 capitalize">{agent.gender}</p>
             </div>
-            <ProgressBar value={agent.hunger} color={hungerColor} />
         </div>
-      </div>
-
-      <div className="text-xs space-y-1 pt-2 border-t border-slate-700/50">
-          <p className="flex justify-between"><span>Foraging:</span> <span className="font-mono">{agent.skills.foraging}</span></p>
-          <p className="flex justify-between"><span>Woodcutting:</span> <span className="font-mono">{agent.skills.woodcutting}</span></p>
-          <p className="flex justify-between"><span>Crafting:</span> <span className="font-mono">{agent.skills.crafting}</span></p>
-      </div>
+        <div className="mt-4 space-y-3">
+             {/* Placeholder stats. These would be part of the Agent type in a more complex sim */}
+            <StatBar label="Health" value={85} max={100} color="bg-red-500" />
+            <StatBar label="Morale" value={60} max={100} color="bg-sky-500" />
+            <StatBar label="Energy" value={75} max={100} color="bg-yellow-500" />
+        </div>
     </div>
   );
 };

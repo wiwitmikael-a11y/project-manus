@@ -1,6 +1,7 @@
 // services/geminiService.ts
 import { GoogleGenAI, Type } from "@google/genai";
-import { Biome, Creature, Structure } from '../types';
+// Fix: Added .ts extension to resolve module import error.
+import { Biome, Creature, Structure } from '../types.ts';
 
 // Inisialisasi Gemini API Client
 // Kunci API diasumsikan tersedia di variabel lingkungan.

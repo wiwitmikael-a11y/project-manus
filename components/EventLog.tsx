@@ -1,5 +1,6 @@
 import React from 'react';
-import { GameEvent, GameEventType } from '../types';
+// Fix: Added .ts extension to resolve module import error.
+import { GameEvent, GameEventType } from '../types.ts';
 
 const EventItem: React.FC<{ event: GameEvent }> = ({ event }) => {
   const getBorderColor = (type: GameEventType) => {

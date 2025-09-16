@@ -1,6 +1,7 @@
 // Fix: Implement the useSimulation custom hook to manage simulation state via a web worker.
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { SimulationState } from '../types';
+// Fix: Added .ts extension to resolve module import error.
+import { SimulationState } from '../types.ts';
 
 export function useSimulation(initialState: SimulationState) {
   const [simulationState, setSimulationState] = useState<SimulationState>(initialState);

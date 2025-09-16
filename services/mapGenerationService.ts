@@ -1,5 +1,6 @@
 // services/mapGenerationService.ts
-import { ResourceNode, ResourceNodeType } from '../types';
+// Fix: Added .ts extension to resolve module import error.
+import { ResourceNode, ResourceNodeType, LootContainer, LootContainerType } from '../types.ts';
 
 // Perlin noise generator
 class PRNG {
@@ -127,24 +128,20 @@ export function spawnResourceNodes(tileMap: number[][], count: number): Resource
     const width = tileMap[0].length;
     let nodeId = 0;
 
-    // Define which tiles can spawn which resources for better world logic
-    const treeSpawnTiles = [...SPARSE_GRASS_TILES, ...LUSH_GRASS_TILES, 17, 22, 23, 29, 30, 37]; // Tiles with grass/trees
-    const scrapSpawnTiles = [...DARK_WASTELAND_TILES, ...CLAY_SOIL_TILES, ...DEBRIS_TILES, ...MIXED_DRY_DIRT_TILES, 15, 47]; // Tiles that are barren/rocky
+    const treeSpawnTiles = [...SPARSE_GRASS_TILES, ...LUSH_GRASS_TILES, 17, 22, 23, 29, 30, 37];
+    const scrapSpawnTiles = [...DARK_WASTELAND_TILES, ...CLAY_SOIL_TILES, ...DEBRIS_TILES, ...MIXED_DRY_DIRT_TILES, 15, 47];
 
     for(let i = 0; i < count; i++) {
-        // Try up to 10 times to find a valid, non-overlapping spot
         for (let attempt = 0; attempt < 10; attempt++) {
             const x = Math.floor(Math.random() * width);
             const y = Math.floor(Math.random() * height);
             const tile = tileMap[y][x];
 
-            // Check if a node already exists here
             if (nodes.some(node => node.x === x && node.y === y)) {
-                continue; // Try another spot
+                continue;
             }
 
             let type: ResourceNodeType | null = null;
-            // 50% chance to try spawning a resource on a valid tile
             if (Math.random() > 0.5) {
                 if (treeSpawnTiles.includes(tile)) {
                     type = 'fallen_tree';
@@ -158,11 +155,71 @@ export function spawnResourceNodes(tileMap: number[][], count: number): Resource
                     id: `node-${nodeId++}`,
                     type,
                     x, y,
-                    amount: Math.random() * 50 + 50, // Resource amount between 50-100
+                    amount: Math.random() * 50 + 50,
                 });
-                break; // Found a spot, move to the next node
+                break;
             }
         }
     }
     return nodes;
+}
+
+/**
+ * Menempatkan kontainer jarahan (loot) secara prosedural di peta.
+ * @param tileMap Peta tile yang sudah ada.
+ * @param count Jumlah kontainer yang ingin dibuat.
+ * @returns Array berisi LootContainer.
+ */
+export function spawnLootContainers(tileMap: number[][], count: number): LootContainer[] {
+    const containers: LootContainer[] = [];
+    const height = tileMap.length;
+    if (height === 0) return [];
+    const width = tileMap[0].length;
+    let containerId = 0;
+
+    const carSpawnTiles = [54]; // R7C7 -> Dirt with traffic cone (placeholder for a car)
+    const debrisSpawnTiles = [...DARK_WASTELAND_TILES, ...DEBRIS_TILES, 15, 47];
+
+    const allSpawnableLocations: {x: number, y: number}[] = [];
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+             const tile = tileMap[y][x];
+             if (carSpawnTiles.includes(tile) || debrisSpawnTiles.includes(tile)) {
+                 allSpawnableLocations.push({x, y});
+             }
+        }
+    }
+
+    for (let i = allSpawnableLocations.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allSpawnableLocations[i], allSpawnableLocations[j]] = [allSpawnableLocations[j], allSpawnableLocations[i]];
+    }
+    
+    const existingLocations = new Set<string>();
+
+    for(let i = 0; i < count && i < allSpawnableLocations.length; i++) {
+        const { x, y } = allSpawnableLocations[i];
+        const locationKey = `${x},${y}`;
+        if(existingLocations.has(locationKey)) continue;
+
+        const tile = tileMap[y][x];
+        let type: LootContainerType | null = null;
+
+        if (carSpawnTiles.includes(tile) && Math.random() > 0.3) {
+            type = 'ruined_car';
+        } else if (debrisSpawnTiles.includes(tile)) {
+            type = 'debris_pile';
+        }
+
+        if (type) {
+            containers.push({
+                id: `loot-${containerId++}`,
+                type,
+                x, y,
+                isEmpty: false,
+            });
+            existingLocations.add(locationKey);
+        }
+    }
+    return containers;
 }

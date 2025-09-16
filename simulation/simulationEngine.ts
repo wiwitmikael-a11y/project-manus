@@ -1,137 +1,94 @@
-import { SimulationState, Agent, GameEvent, GameEventType, AgentDirection, ResourceNode } from '../types';
-import { spritesheetMapping } from '../assets/assetMapping';
+// simulation/simulationEngine.ts
 
-// Konfigurasi Simulasi
-const TICKS_PER_HOUR = 10;
+// FIX: Import Agent type to correctly type agent objects within the simulation engine.
+import { SimulationState, TimeOfDay, Agent } from '../types.ts';
+
+const TICKS_PER_HOUR = 60; // e.g., 60 ticks is one game hour
 const HOURS_PER_DAY = 24;
-const DAY_START_HOUR = 6;
-const NIGHT_START_HOUR = 19;
-const MOVEMENT_SPEED = 0.3;
 
-let eventIdCounter = 1;
+/**
+ * Updates the game clock.
+ * @param state The current simulation state.
+ * @returns The updated simulation state.
+ */
+function updateTime(state: SimulationState): SimulationState {
+    const newState = { ...state };
+    newState.tick = (newState.tick + 1) % TICKS_PER_HOUR;
 
-const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
-
-const getDirection = (agent: Agent): AgentDirection => {
-    if (!agent.isMoving) return agent.direction;
-    const dx = agent.targetX - agent.x;
-    const dy = agent.targetY - agent.y;
-    if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1) return agent.direction;
-    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-    const calcIndex = Math.round((angle + 360) / 45) % 8;
-    const directionMap: AgentDirection[] = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
-    return directionMap[calcIndex];
-};
-
-const findClosestNode = (agent: Agent, nodes: ResourceNode[]): ResourceNode | null => {
-    let closestNode: ResourceNode | null = null;
-    let minDistance = Infinity;
-    nodes.forEach(node => {
-        const dx = node.x - agent.x;
-        const dy = node.y - agent.y;
-        const distance = dx * dx + dy * dy;
-        if (distance < minDistance) {
-            minDistance = distance;
-            closestNode = node;
-        }
-    });
-    return closestNode;
-};
-
-export function runSimulationTick(currentState: SimulationState): SimulationState {
-    const nextState: SimulationState = JSON.parse(JSON.stringify(currentState));
-
-    // --- Pembaruan Waktu ---
-    nextState.tick++;
-    if (nextState.tick >= TICKS_PER_HOUR) {
-        nextState.tick = 0;
-        nextState.hour++;
-        if (nextState.hour >= HOURS_PER_DAY) {
-            nextState.hour = 0;
-            nextState.day++;
-            // --- Pembaruan Harian ---
-            const dailyFoodConsumption = nextState.agents.length * 0.8;
-            nextState.resources.food = Math.max(0, nextState.resources.food - dailyFoodConsumption);
+    if (newState.tick === 0) {
+        newState.hour = (newState.hour + 1);
+        if (newState.hour >= HOURS_PER_DAY) {
+            newState.hour = 0;
+            newState.day += 1;
         }
     }
-    nextState.timeOfDay = (nextState.hour >= DAY_START_HOUR && nextState.hour < NIGHT_START_HOUR) ? 'day' : 'night';
+    
+    // Determine Time of Day
+    if (newState.hour >= 6 && newState.hour < 20) {
+        newState.timeOfDay = 'day';
+    } else {
+        newState.timeOfDay = 'night';
+    }
 
-    // --- Pembaruan Agen ---
-    nextState.agents.forEach(agent => {
-        // --- Logika Tugas & Perilaku ---
-        if (agent.task === 'Idle') {
-            const availableNodes = nextState.world.resourceNodes.filter(node => 
-                !nextState.agents.some(a => a.targetNodeId === node.id)
-            );
-            if (availableNodes.length > 0) {
-                const targetNode = findClosestNode(agent, availableNodes);
-                if (targetNode) {
-                    agent.task = 'Moving to Target';
-                    agent.targetNodeId = targetNode.id;
-                    agent.targetX = targetNode.x;
-                    agent.targetY = targetNode.y;
-                    agent.isMoving = true;
-                }
+    return newState;
+}
+
+/**
+ * Updates the position of all agents.
+ * @param state The current simulation state.
+ * @returns The updated simulation state.
+ */
+function updateAgentMovement(state: SimulationState): SimulationState {
+    const AGENT_SPEED = 0.05; // tiles per tick
+
+    // FIX: Add a return type annotation to the map callback to ensure returned objects conform to the Agent type.
+    const newAgents = state.agents.map((agent): Agent => {
+        if (!agent.isMoving) {
+            // Simple random walk for now when idle
+            if (Math.random() < 0.01) { // 1% chance to start moving
+                 return {
+                    ...agent,
+                    isMoving: true,
+                    targetX: agent.x + (Math.random() - 0.5) * 5,
+                    targetY: agent.y + (Math.random() - 0.5) * 5,
+                    animationState: 'walk',
+                 };
             }
+            return agent;
         }
 
-        // --- Logika Pergerakan ---
-        if (agent.isMoving) {
-            const dx = agent.targetX - agent.x;
-            const dy = agent.targetY - agent.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            agent.direction = getDirection(agent);
+        const dx = agent.targetX - agent.x;
+        const dy = agent.targetY - agent.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
 
-            if (dist < 1) {
-                agent.isMoving = false;
-                if (agent.task === 'Moving to Target') {
-                    agent.task = 'Harvesting'; // Sampai di tujuan, mulai memanen
-                }
-            } else {
-                const speed = nextState.timeOfDay === 'night' ? MOVEMENT_SPEED * 0.8 : MOVEMENT_SPEED;
-                agent.x += (dx / dist) * speed;
-                agent.y += (dy / dist) * speed;
-            }
+        if (distance < AGENT_SPEED) {
+            return { ...agent, x: agent.targetX, y: agent.targetY, isMoving: false, animationState: 'idle' };
         }
 
-        // --- Logika Memanen ---
-        if (agent.task === 'Harvesting' && agent.targetNodeId) {
-             const node = nextState.world.resourceNodes.find(n => n.id === agent.targetNodeId);
-             if(node) {
-                 if(node.type === 'fallen_tree') nextState.resources.wood += 0.05;
-                 if(node.type === 'scrap_pile') nextState.resources.scrap += 0.05;
-                 node.amount -= 0.1;
-                 
-                 if(node.amount <= 0) {
-                     nextState.world.resourceNodes = nextState.world.resourceNodes.filter(n => n.id !== node.id);
-                     agent.task = 'Idle';
-                     agent.targetNodeId = undefined;
-                 }
-             } else {
-                 agent.task = 'Idle'; // Node hilang atau sudah diambil
-             }
-        }
+        const newX = agent.x + (dx / distance) * AGENT_SPEED;
+        const newY = agent.y + (dy / distance) * AGENT_SPEED;
+        const newDirection = Math.atan2(dy, dx);
 
-        // --- Pembaruan Animasi ---
-        const nextAnimationState = agent.isMoving ? 'walk' : 'idle';
-        if (agent.animationState !== nextAnimationState) {
-            agent.animationState = nextAnimationState;
-            agent.animationFrame = 0;
-            agent.animationTick = 0;
-        } else {
-            agent.animationTick++;
-        }
-
-        const sheetData = spritesheetMapping[agent.appearance.spritesheet];
-        if (sheetData) {
-            const animKey = agent.animationState as keyof typeof sheetData.animations;
-            const animData = sheetData.animations[animKey];
-            if (animData && agent.animationTick >= animData.speed) {
-                agent.animationTick = 0;
-                agent.animationFrame = (agent.animationFrame + 1) % animData.frames;
-            }
-        }
+        return { ...agent, x: newX, y: newY, direction: newDirection };
     });
 
-    return nextState;
+    return { ...state, agents: newAgents };
+}
+
+/**
+ * Runs a single tick of the simulation.
+ * @param state The current simulation state.
+ * @returns The new simulation state after one tick.
+ */
+export function runSimulationTick(state: SimulationState): SimulationState {
+    if (state.isPaused) {
+        return state;
+    }
+
+    let newState = { ...state };
+    newState = updateTime(newState);
+    newState = updateAgentMovement(newState);
+    // Other systems like resource consumption, agent needs, etc. would go here.
+
+    return newState;
 }

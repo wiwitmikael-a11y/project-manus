@@ -3,8 +3,10 @@ import React, { useState } from 'react';
 import WelcomeScreen from './components/WelcomeScreen';
 import LoadingScreen from './components/LoadingScreen';
 import SimulationViewport from './components/SimulationViewport';
-import { generateGenesis } from './services/markovService';
-import { SimulationState } from './types';
+// Fix: Added .ts extension to resolve module import error.
+import { generateGenesis } from './services/markovService.ts';
+// Fix: Added .ts extension to resolve module import error.
+import { SimulationState } from './types.ts';
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<'welcome' | 'generating' | 'running'>('welcome');
@@ -17,14 +19,17 @@ const App: React.FC = () => {
     
     const simState: SimulationState = {
       agents: genesisData.agents,
-      resources: { food: 50, wood: 20, scrap: 10, stability: 75 },
+      resources: { food: 50, wood: 20, scrap: 10, stability: 75, researchPoints: 0 },
       culturalValues: genesisData.culturalValues,
       events: [genesisData.startingEvent],
       world: {
-        biomes: genesisData.biomes,
-        structures: genesisData.structures,
-        creatures: genesisData.creatures,
+        // FIX: Add unique IDs to world elements from genesis data to match the required types.
+        biomes: genesisData.biomes.map((biome, i) => ({ ...biome, id: `biome_${i}` })),
+        structures: genesisData.structures.map((structure, i) => ({ ...structure, id: `structure_${i}` })),
+        creatures: genesisData.creatures.map((creature, i) => ({ ...creature, id: `creature_${i}` })),
         resourceNodes: [], // Akan diisi oleh worker
+        lootContainers: [], 
+        placedStructures: [], 
         width: 50, // World dimensions
         height: 50,
         tileMap: null,
@@ -34,6 +39,10 @@ const App: React.FC = () => {
       timeOfDay: 'day',
       tick: 0,
       isPaused: true,
+      // State baru untuk otonomi
+      knownBlueprintIds: ['shelter_1'], // Mulai dengan mengetahui cara membuat shelter dasar
+      activeResearchId: null,
+      completedResearchIds: [],
     };
 
     setInitialState(simState);
