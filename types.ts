@@ -57,6 +57,23 @@ export interface CulturalValues {
   spirituality: number;
 }
 
+export interface Biome {
+  name: string;
+  description: string;
+}
+
+export interface Structure {
+  name: string;
+  description: string;
+  type: 'SHELTER' | 'LANDMARK' | 'STORAGE';
+}
+
+export interface Creature {
+  name: string;
+  description: string;
+  temperament: 'DOCILE' | 'NEUTRAL' | 'HOSTILE';
+}
+
 export interface SimulationState {
   agents: Agent[];
   resources: ColonyResources;
@@ -64,4 +81,32 @@ export interface SimulationState {
   events: GameEvent[];
   day: number;
   isPaused: boolean;
+  biomes: Biome[];
+  structures: Structure[];
+  creatures: Creature[];
+}
+
+// The data structure returned by the AI for world genesis
+export interface GenesisData {
+  agents: Omit<Agent, 'x' | 'y' | 'targetX' | 'targetY' | 'isMoving' | 'direction' | 'relationships'>[];
+  startingEvent: Omit<GameEvent, 'id' | 'timestamp'>;
+  culturalValues: CulturalValues;
+  biomes: Biome[];
+  structures: Structure[];
+  creatures: Creature[];
+}
+
+// Lightweight types for efficient worker communication
+export interface AgentVitals {
+    id: string;
+    x: number;
+    y: number;
+    direction: Agent['direction'];
+    isMoving: boolean;
+}
+
+export interface ColonyStats {
+    resources: ColonyResources;
+    culturalValues: CulturalValues;
+    day: number;
 }

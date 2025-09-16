@@ -1,179 +1,180 @@
-// simulation.worker.ts
+import { SimulationState, Agent, GenesisData, GameEvent, AgentVitals, ColonyStats } from './types';
 
-// Since this is a worker, we can't use TS module imports directly.
-// The types are for documentation and structural compatibility.
-// Copied from types.ts for use within the worker.
-const GameEventType = {
-  NARRATIVE: 'NARRATIVE',
-  AGENT: 'AGENT',
-  SYSTEM: 'SYSTEM',
+const WORLD_WIDTH = 800;
+const WORLD_HEIGHT = 600;
+const TICK_RATE = 1000; // ms per tick
+const DAY_LENGTH = 60; // ticks per day
+const AI_EVENT_INTERVAL_DAYS = 3; // Request a new AI event every 3 days
+
+let state: SimulationState = {
+  agents: [],
+  resources: { food: 50, wood: 20, stability: 80 },
+  culturalValues: { collectivism: 50, pragmatism: 50, spirituality: 50 },
+  events: [],
+  day: 1,
+  isPaused: true,
+  biomes: [],
+  structures: [],
+  creatures: [],
 };
 
+let simulationInterval: number | null = null;
+let tickCounter = 0;
 
-/**
- * @typedef {import('./types').SimulationState} SimulationState
- * @typedef {import('./types').Agent} Agent
- * @typedef {import('./types').GenesisData} GenesisData
- * @typedef {import('./types').GameEvent} GameEvent
- */
+function update() {
+  if (state.isPaused) return;
 
-/** @type {SimulationState | null} */
-let state = null;
-let gameLoop = null;
-const TICK_RATE = 100; // ms per tick, 10 ticks per second
-const WORLD_BOUNDS = { width: 1000, height: 1000 };
+  tickCounter++;
+  // Daily updates
+  if (tickCounter >= DAY_LENGTH) {
+    tickCounter = 0;
+    state.day++;
+    
+    // Daily food consumption
+    const dailyFoodConsumption = state.agents.length * 0.5;
+    state.resources.food = Math.max(0, state.resources.food - dailyFoodConsumption);
 
-/** @param {GenesisData} genesisData */
-function initialize(genesisData) {
-    const initialAgents = genesisData.agentPersonalities.map((p, index) => ({
-        id: self.crypto.randomUUID(),
-        name: p.name,
-        task: 'Idle',
-        mood: 70,
-        hunger: 0,
-        personality: {
-            creativity: p.creativity,
-            pragmatism: p.pragmatism,
-            social: p.social,
-        },
-        skills: {
-            foraging: Math.floor(Math.random() * 10) + 1,
-            woodcutting: Math.floor(Math.random() * 10) + 1,
-            crafting: Math.floor(Math.random() * 10) + 1,
-        },
-        relationships: {},
-        x: 450 + index * 50, // Start near center
-        y: 500,
-        targetX: 450 + index * 50,
-        targetY: 500,
-        isMoving: false,
+    state.agents.forEach(agent => {
+        agent.hunger += 5; 
+        if(agent.hunger > 80 || state.resources.food === 0) agent.mood -= 5;
+    });
+
+    // Request new AI event every few days
+    if (state.day % AI_EVENT_INTERVAL_DAYS === 0) {
+        self.postMessage({ 
+            type: 'REQUEST_AI_EVENT', 
+            payload: { 
+                day: state.day, 
+                resources: state.resources, 
+                events: state.events.slice(-1) 
+            }
+        });
+    }
+    
+    // Post daily stats update
+     self.postMessage({ type: 'STATS_UPDATE', payload: {
+        resources: state.resources,
+        culturalValues: state.culturalValues,
+        day: state.day,
+     } as ColonyStats });
+  }
+
+  // Per-tick updates for agents
+  state.agents.forEach(agent => {
+    agent.hunger = Math.min(100, agent.hunger + 0.1);
+    agent.mood = Math.max(0, agent.mood - 0.05);
+
+    // Task-based AI
+    if (agent.task === 'Foraging') {
+        // Increase food, stay relatively still
+        state.resources.food += 0.2; // Skill could affect this
+        if (Math.random() < 0.02) {
+             agent.isMoving = true;
+             agent.targetX = agent.x + (Math.random() - 0.5) * 50;
+             agent.targetY = agent.y + (Math.random() - 0.5) * 50;
+        }
+    }
+
+    // Movement AI
+    if (agent.isMoving) {
+        const dx = agent.targetX - agent.x;
+        const dy = agent.targetY - agent.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist < 2) {
+            agent.isMoving = false;
+        } else {
+            agent.x += dx / dist;
+            agent.y += dy / dist;
+            if (Math.abs(dx) > Math.abs(dy)) {
+                agent.direction = dx > 0 ? 'right' : 'left';
+            } else {
+                agent.direction = dy > 0 ? 'down' : 'up';
+            }
+        }
+    } else if (agent.task === 'Idle') {
+        // If idle, pick a new random target occasionally
+        if (Math.random() < 0.01) {
+            agent.isMoving = true;
+            agent.targetX = Math.random() * WORLD_WIDTH;
+            agent.targetY = Math.random() * WORLD_HEIGHT;
+        }
+    }
+  });
+
+  const agentVitals: AgentVitals[] = state.agents.map(a => ({
+      id: a.id,
+      x: a.x,
+      y: a.y,
+      direction: a.direction,
+      isMoving: a.isMoving,
+  }));
+
+  self.postMessage({ type: 'AGENT_UPDATE', payload: agentVitals });
+}
+
+function startSimulation() {
+  if (simulationInterval) return;
+  simulationInterval = self.setInterval(update, TICK_RATE);
+}
+
+function stopSimulation() {
+  if (simulationInterval) {
+    self.clearInterval(simulationInterval);
+    simulationInterval = null;
+  }
+}
+
+function initializeState(genesisData: GenesisData) {
+    const initialAgents: Agent[] = genesisData.agents.map(a => ({
+        ...a,
+        x: Math.random() * WORLD_WIDTH,
+        y: Math.random() * WORLD_HEIGHT,
+        targetX: Math.random() * WORLD_WIDTH,
+        targetY: Math.random() * WORLD_HEIGHT,
+        isMoving: true,
         direction: 'down',
+        relationships: {},
     }));
 
     state = {
-        agents: initialAgents,
-        resources: {
-            food: genesisData.initialResources.food,
-            wood: genesisData.initialResources.wood,
-            stability: 100,
-        },
-        culturalValues: genesisData.culturalValues,
-        events: [
-            {
-                id: self.crypto.randomUUID(),
-                type: GameEventType.NARRATIVE,
-                title: genesisData.startingEvent.title,
-                description: genesisData.startingEvent.description,
-                timestamp: Date.now(),
-                isAiGenerated: true,
-            }
-        ],
-        day: 1,
-        isPaused: true,
+      ...state,
+      agents: initialAgents,
+      events: [{
+          ...genesisData.startingEvent,
+          id: `event-${Date.now()}`,
+          timestamp: Date.now(),
+      }],
+      culturalValues: genesisData.culturalValues,
+      biomes: genesisData.biomes,
+      structures: genesisData.structures,
+      creatures: genesisData.creatures,
+      isPaused: true,
     };
+}
+
+self.onmessage = (e: MessageEvent) => {
+  const { type, payload } = e.data;
+
+  switch (type) {
+    case 'INITIALIZE':
+      initializeState(payload as GenesisData);
+      self.postMessage({ type: 'INITIAL_STATE', payload: state });
+      break;
     
-    postStateUpdate();
-}
+    case 'ADD_EVENT':
+        state.events.push(payload as GameEvent);
+        self.postMessage({ type: 'NEW_EVENT', payload: payload as GameEvent });
+        break;
 
-function postStateUpdate() {
-    if (state) {
-        // postMessage natively uses the structured clone algorithm.
-        postMessage({ type: 'STATE_UPDATE', payload: state });
-    }
-}
-
-/** @param {Agent} agent */
-function updateAgentPosition(agent) {
-    if (!agent.isMoving) {
-        // Simple random movement for now
-        if (Math.random() < 0.01) { // 1% chance to start moving each tick
-            agent.isMoving = true;
-            agent.targetX = agent.x + (Math.random() - 0.5) * 100;
-            agent.targetY = agent.y + (Math.random() - 0.5) * 100;
-
-            // Clamp to world bounds
-            agent.targetX = Math.max(0, Math.min(WORLD_BOUNDS.width, agent.targetX));
-            agent.targetY = Math.max(0, Math.min(WORLD_BOUNDS.height, agent.targetY));
-        }
-        return;
-    }
-    
-    const speed = 1; // pixels per tick
-    const dx = agent.targetX - agent.x;
-    const dy = agent.targetY - agent.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (distance < speed) {
-        agent.x = agent.targetX;
-        agent.y = agent.targetY;
-        agent.isMoving = false;
-        agent.task = 'Idle'; // Reset task when destination is reached
-    } else {
-        agent.x += (dx / distance) * speed;
-        agent.y += (dy / distance) * speed;
-        
-        // Update direction
-        if (Math.abs(dx) > Math.abs(dy)) {
-            agent.direction = dx > 0 ? 'right' : 'left';
-        } else {
-            agent.direction = dy > 0 ? 'down' : 'up';
-        }
-    }
-}
-
-
-/** @param {Agent} agent */
-function updateAgent(agent) {
-    // Update needs
-    agent.hunger += 0.05; // Hunger increases over time
-    if (agent.hunger > 100) agent.hunger = 100;
-
-    // Basic AI: if hungry, find food
-    if (agent.hunger > 70 && state && state.resources.food > 0) {
-        state.resources.food -= 1;
-        agent.hunger = 0;
-        agent.mood = Math.min(100, agent.mood + 10);
-    }
-    
-    // Decrease mood if hungry
-    if (agent.hunger > 80) {
-        agent.mood -= 0.1;
-    }
-    if (agent.mood < 0) agent.mood = 0;
-
-    // Update position
-    updateAgentPosition(agent);
-}
-
-
-function gameTick() {
-    if (!state || state.isPaused) return;
-
-    state.agents.forEach(updateAgent);
-    
-    // Other global updates can go here
-
-    postStateUpdate();
-}
-
-function togglePause() {
-    if (state) {
-        state.isPaused = !state.isPaused;
-        postStateUpdate();
-    }
-}
-
-self.onmessage = (e) => {
-    const { type, payload } = e.data;
-    switch (type) {
-        case 'INITIALIZE_SIMULATION':
-            initialize(payload);
-            break;
-        case 'TOGGLE_PAUSE':
-            togglePause();
-            break;
-    }
+    case 'TOGGLE_PAUSE':
+      state.isPaused = !state.isPaused;
+      if (state.isPaused) {
+        stopSimulation();
+      } else {
+        startSimulation();
+      }
+      self.postMessage({ type: 'PAUSE_CHANGE', payload: state.isPaused });
+      break;
+  }
 };
-
-// Start the game loop
-gameLoop = self.setInterval(gameTick, TICK_RATE);

@@ -56,7 +56,11 @@ const App: React.FC = () => {
 
   return (
     <div className="h-screen w-screen bg-slate-900 overflow-hidden">
-      <GameCanvas state={state} onAgentClick={handleAgentClick} />
+      <GameCanvas 
+        state={state} 
+        onAgentClick={handleAgentClick} 
+        selectedAgentId={selectedAgent?.id || null}
+      />
       
       <CommandBar 
         isPaused={state.isPaused}
@@ -71,10 +75,15 @@ const App: React.FC = () => {
         onClose={() => setColonyPanelOpen(false)} 
         title={`Status Koloni (Hari ke-${state.day})`}
       >
-        <ColonyInfoPanel 
-            resources={state.resources} 
-            culturalValues={state.culturalValues} 
-        />
+        <div className="max-h-[60vh] overflow-y-auto pr-2">
+          <ColonyInfoPanel 
+              resources={state.resources} 
+              culturalValues={state.culturalValues}
+              biomes={state.biomes}
+              structures={state.structures}
+              creatures={state.creatures}
+          />
+        </div>
       </GlassmorphismModal>
 
       {/* Event Log Modal */}

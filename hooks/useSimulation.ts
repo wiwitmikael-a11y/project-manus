@@ -1,83 +1,127 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { SimulationState, GameEvent, GameEventType } from '../types';
-import { GenesisData, generateGenesis } from '../services/geminiService';
+import { useEffect, useRef, useReducer, useCallback } from 'react';
+import { SimulationState, AgentVitals, ColonyStats, GameEvent } from '../types';
+import { generateGenesis, generateDynamicEvent } from '../services/geminiService';
 
-const INITIAL_STATE: SimulationState = {
-  agents: [],
-  resources: { food: 0, wood: 0, stability: 100 },
-  culturalValues: { collectivism: 50, pragmatism: 50, spirituality: 50 },
-  events: [],
-  day: 1,
-  isPaused: true,
+type SimulationAction =
+  | { type: 'INITIALIZE_SUCCESS'; payload: SimulationState }
+  | { type: 'INITIALIZE_FAILURE'; payload: string }
+  | { type: 'UPDATE_AGENTS'; payload: AgentVitals[] }
+  | { type: 'UPDATE_STATS'; payload: ColonyStats }
+  | { type: 'ADD_EVENT'; payload: GameEvent }
+  | { type: 'SET_PAUSED'; payload: boolean };
+
+const initialState: {
+  state: SimulationState | null;
+  isLoading: boolean;
+  error: string | null;
+} = {
+  state: null,
+  isLoading: true,
+  error: null,
 };
 
+function simulationReducer(
+  state: typeof initialState,
+  action: SimulationAction
+): typeof initialState {
+  switch (action.type) {
+    case 'INITIALIZE_SUCCESS':
+      return { isLoading: false, error: null, state: action.payload };
+    case 'INITIALIZE_FAILURE':
+      return { isLoading: false, error: action.payload, state: null };
+    case 'UPDATE_AGENTS':
+      if (!state.state) return state;
+      const agentMap = new Map(state.state.agents.map(a => [a.id, a]));
+      for (const vital of action.payload) {
+        const agent = agentMap.get(vital.id);
+        if (agent) {
+          Object.assign(agent, vital);
+        }
+      }
+      return { ...state, state: { ...state.state, agents: [...agentMap.values()] } };
+    case 'UPDATE_STATS':
+      if (!state.state) return state;
+      return { ...state, state: { ...state.state, ...action.payload } };
+    case 'ADD_EVENT':
+      if (!state.state) return state;
+      return { ...state, state: { ...state.state, events: [...state.state.events, action.payload] } };
+    case 'SET_PAUSED':
+       if (!state.state) return state;
+       return { ...state, state: {...state.state, isPaused: action.payload }};
+    default:
+      return state;
+  }
+}
+
 export const useSimulation = () => {
-  const [state, setState] = useState<SimulationState>(INITIAL_STATE);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [simulation, dispatch] = useReducer(simulationReducer, initialState);
   const workerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
-    const initialize = async () => {
+    const startWorldGeneration = async () => {
       try {
-        setError(null);
-        setIsLoading(true);
-
-        // 1. Generate the world's DNA from the AI
         const genesisData = await generateGenesis();
-        
-        // 2. Load worker script content
-        const workerResponse = await fetch('/simulation.worker.ts');
-        if (!workerResponse.ok) {
-          throw new Error('Failed to load the simulation engine.');
-        }
-        const workerScript = await workerResponse.text();
-        const blob = new Blob([workerScript], { type: 'application/javascript' });
-        const objectUrl = URL.createObjectURL(blob);
-
-        // 3. Create the worker from the secure Object URL
-        const worker = new Worker(objectUrl);
+        const worker = new Worker('/simulation.worker.ts', { type: 'module' });
         workerRef.current = worker;
-        
-        // Clean up the object URL to avoid memory leaks
-        URL.revokeObjectURL(objectUrl);
 
-        worker.onmessage = (e: MessageEvent) => {
+        worker.onmessage = async (e: MessageEvent) => {
           const { type, payload } = e.data;
-          if (type === 'STATE_UPDATE') {
-            setState(payload);
+          switch (type) {
+            case 'INITIAL_STATE':
+              dispatch({ type: 'INITIALIZE_SUCCESS', payload });
+              // Unpause the simulation immediately after initialization.
+              worker.postMessage({ type: 'TOGGLE_PAUSE' });
+              break;
+            case 'AGENT_UPDATE':
+              dispatch({ type: 'UPDATE_AGENTS', payload });
+              break;
+            case 'STATS_UPDATE':
+              dispatch({ type: 'UPDATE_STATS', payload });
+              break;
+            case 'NEW_EVENT':
+                dispatch({ type: 'ADD_EVENT', payload });
+                break;
+            case 'PAUSE_CHANGE':
+                dispatch({ type: 'SET_PAUSED', payload });
+                break;
+            case 'REQUEST_AI_EVENT':
+                const newEventData = await generateDynamicEvent(payload);
+                const newEvent: GameEvent = {
+                    ...newEventData,
+                    id: `event-${Date.now()}`,
+                    timestamp: Date.now(),
+                };
+                worker.postMessage({ type: 'ADD_EVENT', payload: newEvent });
+                break;
           }
         };
 
-        // 4. Send the genesis data to the worker to start the simulation
-        worker.postMessage({ type: 'INITIALIZE_SIMULATION', payload: genesisData });
-        
-        // Let the simulation run unpaused initially
-        worker.postMessage({ type: 'TOGGLE_PAUSE' });
+        worker.postMessage({ type: 'INITIALIZE', payload: genesisData });
 
-
-      } catch (e) {
-        if (e instanceof Error) {
-          setError(e.message);
-        } else {
-          setError("An unknown error occurred during world generation.");
+      } catch (err) {
+        let errorMessage = "An unknown error occurred.";
+        if (err instanceof Error) {
+            errorMessage = err.message;
         }
-      } finally {
-        setIsLoading(false);
+        dispatch({ type: 'INITIALIZE_FAILURE', payload: errorMessage });
       }
     };
 
-    initialize();
+    startWorldGeneration();
 
-    // Cleanup function to terminate the worker when the component unmounts.
     return () => {
       workerRef.current?.terminate();
     };
-  }, []); // Empty dependency array ensures this runs only once
+  }, []); 
 
   const togglePause = useCallback(() => {
     workerRef.current?.postMessage({ type: 'TOGGLE_PAUSE' });
   }, []);
 
-  return { state, isLoading, error, togglePause };
+  return { 
+      state: simulation.state, 
+      isLoading: simulation.isLoading, 
+      error: simulation.error, 
+      togglePause 
+  };
 };
