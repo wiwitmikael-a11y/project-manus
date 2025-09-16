@@ -1,65 +1,101 @@
-
-import React from 'react';
-import Header from './components/Header';
-import GenesisInfo from './components/GenesisInfo';
-import SimulationDashboard from './components/SimulationDashboard';
+import React, { useState, useCallback } from 'react';
 import { useSimulation } from './hooks/useSimulation';
-import Card from './components/common/Card';
 import Spinner from './components/common/Spinner';
-import { GameEventType } from './types';
+import Card from './components/common/Card';
+import GameCanvas from './components/GameCanvas';
+import GlassmorphismModal from './components/common/GlassmorphismModal';
+import CommandBar from './components/CommandBar';
+import AgentCard from './components/AgentCard';
+import EventLog from './components/EventLog';
+import ColonyInfoPanel from './components/ColonyInfoPanel';
+import { Agent } from './types';
 
 const App: React.FC = () => {
   const { state, isLoading, error, togglePause } = useSimulation();
+  
+  const [isColonyPanelOpen, setColonyPanelOpen] = useState(false);
+  const [isEventsPanelOpen, setEventsPanelOpen] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+
+  const handleAgentClick = useCallback((agentId: string) => {
+    if (state) {
+      const agent = state.agents.find(a => a.id === agentId);
+      setSelectedAgent(agent || null);
+    }
+  }, [state]);
+
+  const handleCloseAgentModal = () => setSelectedAgent(null);
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-900 font-sans flex items-center justify-center">
-        <Card>
-          <div className="flex flex-col items-center justify-center h-96 gap-4 w-96">
-            <Spinner />
-            <h2 className="text-xl font-bold text-white animate-pulse">Menciptakan Dunia Baru...</h2>
-            <p className="text-slate-400 text-center">AI sedang menenun takdir awal untuk kolonimu.</p>
-          </div>
-        </Card>
+      <div className="flex flex-col items-center justify-center h-screen bg-slate-900">
+        <Spinner />
+        <h2 className="text-xl font-semibold text-sky-400 mt-4">Menciptakan Dunia Baru...</h2>
+        <p className="text-slate-400 mt-2">Sang AI sedang merajut takdir awal kolonimu.</p>
       </div>
     );
   }
 
   if (error) {
     return (
-       <div className="min-h-screen bg-slate-900 font-sans flex items-center justify-center">
-        <Card>
-          <div className="flex flex-col items-center justify-center h-96 gap-4 text-center w-96">
-            <h2 className="text-xl font-bold text-red-500">Gagal Menciptakan Dunia</h2>
-            <p className="text-slate-300 max-w-md">Terjadi kesalahan saat berkomunikasi dengan AI. Silakan periksa kunci API Anda dan coba muat ulang halaman.</p>
-            <p className="text-sm bg-red-900/50 text-red-300 p-3 rounded-md border border-red-700 mt-2">{error}</p>
-          </div>
-        </Card>
+      <div className="flex items-center justify-center h-screen bg-slate-900">
+        <div className="max-w-md w-full p-4">
+            <Card title="Gagal Menciptakan Dunia">
+            <p className="text-red-400">Terjadi kesalahan saat berkomunikasi dengan AI.</p>
+            <p className="text-slate-400 mt-2">Silakan periksa kunci API Anda dan coba muat ulang halaman.</p>
+            <p className="text-xs text-slate-500 mt-4">Detail Error: {error}</p>
+            </Card>
+        </div>
       </div>
     );
   }
 
-  const genesisEvent = state.events.find(e => e.type === GameEventType.NARRATIVE && e.isAiGenerated);
-  const foundingAgents = state.agents; // Assuming initial agents are the founders
+  if (!state) {
+    return <div className="text-center p-8">State simulasi tidak tersedia.</div>;
+  }
 
   return (
-    <div className="min-h-screen bg-slate-900 font-sans">
-      <Header />
-      <main className="p-4 sm:p-6 lg:p-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
-          <div className="lg:col-span-1">
-            <GenesisInfo
-              colonyName={state.events.find(e => e.isAiGenerated)?.title || 'The Colony'} // Heuristic to get name
-              genesisEvent={genesisEvent}
-              culturalValues={state.culturalValues}
-              foundingAgents={foundingAgents}
-            />
-          </div>
-          <div className="lg:col-span-2">
-            <SimulationDashboard state={state} togglePause={togglePause} />
-          </div>
+    <div className="h-screen w-screen bg-slate-900 overflow-hidden">
+      <GameCanvas state={state} onAgentClick={handleAgentClick} />
+      
+      <CommandBar 
+        isPaused={state.isPaused}
+        onTogglePause={togglePause}
+        onColonyClick={() => setColonyPanelOpen(true)}
+        onEventsClick={() => setEventsPanelOpen(true)}
+      />
+
+      {/* Colony Status Modal */}
+      <GlassmorphismModal 
+        isOpen={isColonyPanelOpen} 
+        onClose={() => setColonyPanelOpen(false)} 
+        title={`Status Koloni (Hari ke-${state.day})`}
+      >
+        <ColonyInfoPanel 
+            resources={state.resources} 
+            culturalValues={state.culturalValues} 
+        />
+      </GlassmorphismModal>
+
+      {/* Event Log Modal */}
+      <GlassmorphismModal 
+        isOpen={isEventsPanelOpen} 
+        onClose={() => setEventsPanelOpen(false)} 
+        title="Log Peristiwa"
+      >
+        <div className="max-h-[60vh] overflow-y-auto pr-2">
+            <EventLog events={state.events} />
         </div>
-      </main>
+      </GlassmorphismModal>
+
+      {/* Selected Agent Modal */}
+      <GlassmorphismModal 
+        isOpen={!!selectedAgent} 
+        onClose={handleCloseAgentModal} 
+        title={selectedAgent ? `Detail Kolonis: ${selectedAgent.name}` : ''}
+      >
+        {selectedAgent && <AgentCard agent={selectedAgent} />}
+      </GlassmorphismModal>
     </div>
   );
 };

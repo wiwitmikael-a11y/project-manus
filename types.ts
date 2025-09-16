@@ -1,9 +1,11 @@
-// Fix: Define all necessary types for the simulation application.
-export enum GameEventType {
-  NARRATIVE = 'NARRATIVE',
-  AGENT = 'AGENT',
-  SYSTEM = 'SYSTEM',
-}
+// Fix: Replace TypeScript enum with a const object for JavaScript compatibility in the worker.
+export const GameEventType = {
+  NARRATIVE: 'NARRATIVE',
+  AGENT: 'AGENT',
+  SYSTEM: 'SYSTEM',
+} as const;
+
+export type GameEventType = typeof GameEventType[keyof typeof GameEventType];
 
 export interface GameEvent {
   id: string;
@@ -39,6 +41,8 @@ export interface Agent {
   y: number;
   targetX: number;
   targetY: number;
+  isMoving: boolean;
+  direction: 'down' | 'up' | 'left' | 'right';
 }
 
 export interface ColonyResources {

@@ -1,6 +1,5 @@
 import React from 'react';
 import { GameEvent, GameEventType } from '../types';
-import Card from './common/Card';
 
 const EventItem: React.FC<{ event: GameEvent }> = ({ event }) => {
   const getBorderColor = (type: GameEventType) => {
@@ -27,7 +26,6 @@ const EventItem: React.FC<{ event: GameEvent }> = ({ event }) => {
         )}
       </div>
       <p className="text-sm text-slate-300 mt-1">{event.description}</p>
-      <p className="text-xs text-slate-500 text-right mt-2">{new Date(event.timestamp).toLocaleTimeString()}</p>
     </div>
   );
 };
@@ -36,16 +34,14 @@ const EventLog: React.FC<{ events: GameEvent[] }> = ({ events }) => {
   const sortedEvents = [...events].sort((a, b) => b.timestamp - a.timestamp);
 
   return (
-    <Card title="Event Log">
-      <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-        {sortedEvents.length === 0 && (
-          <p className="text-slate-500 text-center py-4">No events have occurred yet.</p>
-        )}
-        {sortedEvents.map(event => (
-          <EventItem key={event.id} event={event} />
-        ))}
-      </div>
-    </Card>
+    <div className="space-y-3 pr-2">
+      {sortedEvents.length === 0 && (
+        <p className="text-slate-500 text-center py-4">No events have occurred yet.</p>
+      )}
+      {sortedEvents.map(event => (
+        <EventItem key={event.id} event={event} />
+      ))}
+    </div>
   );
 };
 

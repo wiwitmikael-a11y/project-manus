@@ -12,7 +12,8 @@
     "@google/genai": "^1.19.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "phaser": "^3.90.0"
+    "phaser": "^3.90.0",
+    "webworker": "^0.8.4"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

@@ -26,10 +26,21 @@ export const useSimulation = () => {
         // 1. Generate the world's DNA from the AI
         const genesisData = await generateGenesis();
         
-        // 2. Create the worker using a robust path relative to the document root.
-        // This avoids issues with `import.meta.url` in certain environments.
-        const worker = new Worker('simulation.worker.ts', { type: 'module' });
+        // 2. Load worker script content
+        const workerResponse = await fetch('/simulation.worker.ts');
+        if (!workerResponse.ok) {
+          throw new Error('Failed to load the simulation engine.');
+        }
+        const workerScript = await workerResponse.text();
+        const blob = new Blob([workerScript], { type: 'application/javascript' });
+        const objectUrl = URL.createObjectURL(blob);
+
+        // 3. Create the worker from the secure Object URL
+        const worker = new Worker(objectUrl);
         workerRef.current = worker;
+        
+        // Clean up the object URL to avoid memory leaks
+        URL.revokeObjectURL(objectUrl);
 
         worker.onmessage = (e: MessageEvent) => {
           const { type, payload } = e.data;
@@ -38,7 +49,7 @@ export const useSimulation = () => {
           }
         };
 
-        // 3. Send the genesis data to the worker to start the simulation
+        // 4. Send the genesis data to the worker to start the simulation
         worker.postMessage({ type: 'INITIALIZE_SIMULATION', payload: genesisData });
         
         // Let the simulation run unpaused initially
