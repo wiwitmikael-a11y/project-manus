@@ -1,7 +1,7 @@
 
 import { useEffect, useReducer, useCallback, useRef } from 'react';
 import { SimulationState, Agent, GenesisData, GameEvent } from '../types';
-import { generateGenesis, generateDynamicEvent } from '../services/geminiService';
+import { generateGenesis, generateDynamicEvent } from '../services/markovService';
 
 const TICK_RATE = 1000; // ms per tick
 const DAY_LENGTH = 60; // ticks per day
