@@ -1,0 +1,5 @@
+{
+  "name": "Project MANUS",
+  "description": "An interactive dashboard and simulation prototype for 'Project MANUS', a narrative sandbox game concept. This application visualizes the game's core design pillars and uses AI to generate dynamic narrative events.",
+  "requestFramePermissions": []
+}
