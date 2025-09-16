@@ -14,10 +14,12 @@
     "phaser": "^3.90.0",
     "webworker": "^0.8.4",
     "pixi.js": "^8.13.2",
-    "@pixi/react": "^8.0.3"
+    "@pixi/react": "^8.0.3",
+    "phaser3-box2d-plugin": "2.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

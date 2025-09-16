@@ -1,3 +1,4 @@
+
 import { useEffect, useReducer, useCallback, useRef } from 'react';
 import { SimulationState, Agent, GenesisData, GameEvent } from '../types';
 import { generateGenesis, generateDynamicEvent } from '../services/geminiService';
@@ -5,13 +6,16 @@ import { generateGenesis, generateDynamicEvent } from '../services/geminiService
 const TICK_RATE = 1000; // ms per tick
 const DAY_LENGTH = 60; // ticks per day
 const AI_EVENT_INTERVAL_DAYS = 3; // Request a new AI event every 3 days
-const WORLD_WIDTH = 800;
-const WORLD_HEIGHT = 600;
+const WORLD_WIDTH = 50; // Map dimensions in tiles
+const WORLD_HEIGHT = 50; // Map dimensions in tiles
+
+// Helper to keep coordinates within map bounds
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
 type SimulationAction =
   | { type: 'INITIALIZE_SUCCESS'; payload: SimulationState }
   | { type: 'INITIALIZE_FAILURE'; payload: string }
-  | { type: 'TICK'; payload: { newEvent?: GameEvent } }
+  | { type: 'UPDATE_STATE'; payload: SimulationState }
   | { type: 'SET_PAUSED'; payload: boolean };
 
 const initialState: {
@@ -36,13 +40,9 @@ function simulationReducer(
     case 'SET_PAUSED':
       if (!state.state) return state;
       return { ...state, state: { ...state.state, isPaused: action.payload } };
-    case 'TICK':
+    case 'UPDATE_STATE':
         if (!state.state) return state;
-        const newState = { ...state.state };
-        if(action.payload.newEvent) {
-            newState.events = [...newState.events, action.payload.newEvent];
-        }
-        return { ...state, state: newState };
+        return { ...state, state: action.payload };
     default:
       return state;
   }
@@ -58,47 +58,57 @@ export const useSimulation = () => {
     const currentState = stateRef.current;
     if (!currentState || currentState.isPaused) return;
 
+    // Create a new state object for this tick to avoid mutation.
+    let nextState: SimulationState = {
+        ...currentState,
+        agents: currentState.agents.map(a => ({...a})),
+        resources: {...currentState.resources},
+        // Start with the same events array reference. A new array will be created only if an event is added.
+        events: currentState.events, 
+    };
+
     tickCounter.current++;
-    let newEvent: GameEvent | undefined = undefined;
     
     // Daily updates
     if (tickCounter.current >= DAY_LENGTH) {
       tickCounter.current = 0;
-      currentState.day++;
+      nextState.day++;
       
-      const dailyFoodConsumption = currentState.agents.length * 0.5;
-      currentState.resources.food = Math.max(0, currentState.resources.food - dailyFoodConsumption);
+      const dailyFoodConsumption = nextState.agents.length * 0.5;
+      nextState.resources.food = Math.max(0, nextState.resources.food - dailyFoodConsumption);
 
-      currentState.agents.forEach(agent => {
+      nextState.agents.forEach(agent => {
           agent.hunger += 5; 
-          if(agent.hunger > 80 || currentState.resources.food === 0) agent.mood -= 5;
+          if(agent.hunger > 80 || nextState.resources.food === 0) agent.mood -= 5;
       });
 
-      if (currentState.day % AI_EVENT_INTERVAL_DAYS === 0) {
+      if (nextState.day % AI_EVENT_INTERVAL_DAYS === 0) {
         const newEventData = await generateDynamicEvent({
-            day: currentState.day, 
-            resources: currentState.resources, 
-            events: currentState.events.slice(-1) 
+            day: nextState.day, 
+            resources: nextState.resources, 
+            events: nextState.events.slice(-1) 
         });
-        newEvent = {
+        const newEvent = {
             ...newEventData,
             id: `event-${Date.now()}`,
             timestamp: Date.now(),
         };
+        // Create a new events array when adding a new event
+        nextState.events = [...nextState.events, newEvent];
       }
     }
 
     // Per-tick updates for agents
-    currentState.agents.forEach(agent => {
+    nextState.agents.forEach(agent => {
       agent.hunger = Math.min(100, agent.hunger + 0.1);
       agent.mood = Math.max(0, agent.mood - 0.05);
 
       if (agent.task === 'Foraging') {
-          currentState.resources.food += 0.2;
+          nextState.resources.food += 0.2;
           if (Math.random() < 0.02) {
                agent.isMoving = true;
-               agent.targetX = agent.x + (Math.random() - 0.5) * 50;
-               agent.targetY = agent.y + (Math.random() - 0.5) * 50;
+               agent.targetX = clamp(agent.x + (Math.random() - 0.5) * 10, 0, WORLD_WIDTH);
+               agent.targetY = clamp(agent.y + (Math.random() - 0.5) * 10, 0, WORLD_HEIGHT);
           }
       }
 
@@ -106,24 +116,22 @@ export const useSimulation = () => {
           const dx = agent.targetX - agent.x;
           const dy = agent.targetY - agent.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 2) {
+          if (dist < 1) { // Stop when close enough
               agent.isMoving = false;
           } else {
-              agent.x += dx / dist;
+              agent.x += dx / dist; // Move 1 unit per tick
               agent.y += dy / dist;
-              if (Math.abs(dx) > Math.abs(dy)) agent.direction = dx > 0 ? 'right' : 'left';
-              else agent.direction = dy > 0 ? 'down' : 'up';
           }
       } else if (agent.task === 'Idle') {
           if (Math.random() < 0.01) {
               agent.isMoving = true;
-              agent.targetX = Math.random() * WORLD_WIDTH;
-              agent.targetY = Math.random() * WORLD_HEIGHT;
+              agent.targetX = clamp(Math.random() * WORLD_WIDTH, 0, WORLD_WIDTH);
+              agent.targetY = clamp(Math.random() * WORLD_HEIGHT, 0, WORLD_HEIGHT);
           }
       }
     });
 
-    dispatch({ type: 'TICK', payload: { newEvent } });
+    dispatch({ type: 'UPDATE_STATE', payload: nextState });
   }, []);
 
   // Initialization Effect
@@ -139,7 +147,6 @@ export const useSimulation = () => {
             targetX: Math.random() * WORLD_WIDTH,
             targetY: Math.random() * WORLD_HEIGHT,
             isMoving: true,
-            direction: 'down',
             relationships: {},
         }));
 

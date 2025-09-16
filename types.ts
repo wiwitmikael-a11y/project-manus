@@ -42,7 +42,6 @@ export interface Agent {
   targetX: number;
   targetY: number;
   isMoving: boolean;
-  direction: 'down' | 'up' | 'left' | 'right';
 }
 
 export interface ColonyResources {
@@ -88,7 +87,7 @@ export interface SimulationState {
 
 // The data structure returned by the AI for world genesis
 export interface GenesisData {
-  agents: Omit<Agent, 'x' | 'y' | 'targetX' | 'targetY' | 'isMoving' | 'direction' | 'relationships'>[];
+  agents: Omit<Agent, 'x' | 'y' | 'targetX' | 'targetY' | 'isMoving' | 'relationships'>[];
   startingEvent: Omit<GameEvent, 'id' | 'timestamp'>;
   culturalValues: CulturalValues;
   biomes: Biome[];
@@ -101,7 +100,6 @@ export interface AgentVitals {
     id: string;
     x: number;
     y: number;
-    direction: Agent['direction'];
     isMoving: boolean;
 }
 
