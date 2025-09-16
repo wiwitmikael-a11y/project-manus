@@ -19,7 +19,7 @@ const StatDisplay: React.FC<{ label: string; value: string | number; icon: strin
     </div>
 );
 
-const WorldElementList: React.FC<{ title: string; items: { name: string; description: string }[]; icon: string }> = ({ title, items, icon }) => (
+const WorldElementList: React.FC<{ title: string; items: (Biome | Structure | Creature)[]; icon: string }> = ({ title, items, icon }) => (
     <div>
         <h4 className="font-semibold text-slate-200 mb-2 mt-4 flex items-center">
             <span className="text-lg mr-2">{icon}</span>
@@ -27,7 +27,7 @@ const WorldElementList: React.FC<{ title: string; items: { name: string; descrip
         </h4>
         <div className="space-y-2">
             {items.map(item => (
-                <div key={item.name} className="bg-slate-700/30 p-2 rounded-md border border-slate-700/50">
+                <div key={item.id} className="bg-slate-700/30 p-2 rounded-md border border-slate-700/50">
                     <p className="font-semibold text-slate-100 text-sm">{item.name}</p>
                     <p className="text-xs text-slate-400 mt-0.5">{item.description}</p>
                 </div>

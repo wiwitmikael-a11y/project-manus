@@ -132,7 +132,7 @@ narrativeGenerator.train(corpus);
 
 // --- Fungsi Bantuan ---
 const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
 
 const generateUniqueName = (): string => {
     const first = firstNames[getRandomInt(0, firstNames.length - 1)];
@@ -159,18 +159,19 @@ const generateAgent = (id: number): Omit<Agent, 'x' | 'y' | 'targetX' | 'targetY
 });
 
 const generateWorldElement = (type: 'biome' | 'structure' | 'creature'): Biome | Structure | Creature => {
-    const name = capitalize(narrativeGenerator.generate(2).replace('.', ''));
+    const name = capitalize(narrativeGenerator.generate(getRandomInt(2,4)).replace('.', ''));
     const description = narrativeGenerator.generate(getRandomInt(10, 20));
+    const id = `${type}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
 
     if (type === 'creature') {
         const temperaments: Creature['temperament'][] = ['DOCILE', 'NEUTRAL', 'HOSTILE'];
-        return { name, description, temperament: temperaments[getRandomInt(0, 2)] };
+        return { id, name, description, temperament: temperaments[getRandomInt(0, 2)] };
     }
     if (type === 'structure') {
         const types: Structure['type'][] = ['SHELTER', 'LANDMARK', 'STORAGE'];
-        return { name, description, type: types[getRandomInt(0, 2)] };
+        return { id, name, description, type: types[getRandomInt(0, 2)] };
     }
-    return { name, description };
+    return { id, name, description };
 }
 
 /**

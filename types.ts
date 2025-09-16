@@ -57,17 +57,20 @@ export interface CulturalValues {
 }
 
 export interface Biome {
+  id: string;
   name: string;
   description: string;
 }
 
 export interface Structure {
+  id: string;
   name: string;
   description: string;
   type: 'SHELTER' | 'LANDMARK' | 'STORAGE';
 }
 
 export interface Creature {
+  id: string;
   name: string;
   description: string;
   temperament: 'DOCILE' | 'NEUTRAL' | 'HOSTILE';
