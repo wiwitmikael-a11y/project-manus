@@ -7,8 +7,8 @@ export type AgentState = 'idle' | 'walking' | 'gathering' | 'building' | 'lootin
 export type Temperament = 'DOCILE' | 'NEUTRAL' | 'HOSTILE';
 export enum GameEventType { NARRATIVE, AGENT, SYSTEM }
 export type StructureType = 'SHELTER' | 'LANDMARK' | 'STORAGE' | 'RESEARCH';
-export type ResourceNodeType = 'fallen_tree' | 'scrap_pile';
-export type LootContainerType = 'ruined_car' | 'debris_pile';
+export type ResourceNodeType = 'fallen_tree' | 'scrap_pile' | 'berry_bush' | 'electronics_scrap';
+export type LootContainerType = 'ruined_car' | 'debris_pile' | 'military_crate';
 
 // --- Core Interfaces ---
 

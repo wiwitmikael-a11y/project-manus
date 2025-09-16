@@ -128,37 +128,53 @@ export function spawnResourceNodes(tileMap: number[][], count: number): Resource
     const width = tileMap[0].length;
     let nodeId = 0;
 
-    const treeSpawnTiles = [...SPARSE_GRASS_TILES, ...LUSH_GRASS_TILES, 17, 22, 23, 29, 30, 37];
-    const scrapSpawnTiles = [...DARK_WASTELAND_TILES, ...CLAY_SOIL_TILES, ...DEBRIS_TILES, ...MIXED_DRY_DIRT_TILES, 15, 47];
+    // Define tiles where each resource type can spawn
+    const spawnRules: { type: ResourceNodeType, tiles: number[] }[] = [
+        { type: 'fallen_tree', tiles: [...SPARSE_GRASS_TILES, ...LUSH_GRASS_TILES, 17, 22, 23, 29, 30, 37] },
+        { type: 'scrap_pile', tiles: [...DARK_WASTELAND_TILES, ...CLAY_SOIL_TILES, ...DEBRIS_TILES, ...MIXED_DRY_DIRT_TILES, 15, 47] },
+        { type: 'berry_bush', tiles: [...LUSH_GRASS_TILES, 25] }, // Berries grow in lush areas, especially with wildflowers
+        { type: 'electronics_scrap', tiles: [...DEBRIS_TILES, 54] }, // Electronics found near debris and maybe traffic cones (cars)
+    ];
 
-    for(let i = 0; i < count; i++) {
-        for (let attempt = 0; attempt < 10; attempt++) {
-            const x = Math.floor(Math.random() * width);
-            const y = Math.floor(Math.random() * height);
+    const allSpawnableLocations: {x: number, y: number}[] = [];
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
             const tile = tileMap[y][x];
-
-            if (nodes.some(node => node.x === x && node.y === y)) {
-                continue;
+            if (spawnRules.some(rule => rule.tiles.includes(tile))) {
+                allSpawnableLocations.push({x, y});
             }
+        }
+    }
+    
+    // Shuffle locations to randomize placement
+    for (let i = allSpawnableLocations.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allSpawnableLocations[i], allSpawnableLocations[j]] = [allSpawnableLocations[j], allSpawnableLocations[i]];
+    }
 
-            let type: ResourceNodeType | null = null;
-            if (Math.random() > 0.5) {
-                if (treeSpawnTiles.includes(tile)) {
-                    type = 'fallen_tree';
-                } else if (scrapSpawnTiles.includes(tile)) {
-                    type = 'scrap_pile';
-                }
-            }
+    const existingLocations = new Set<string>();
+
+    for (let i = 0; i < count && i < allSpawnableLocations.length; i++) {
+        const { x, y } = allSpawnableLocations[i];
+        const locationKey = `${x},${y}`;
+        if (existingLocations.has(locationKey)) continue;
+
+        const tile = tileMap[y][x];
+
+        // Find which resource types can spawn here
+        const possibleTypes = spawnRules.filter(rule => rule.tiles.includes(tile)).map(rule => rule.type);
+
+        if (possibleTypes.length > 0) {
+            // Pick one randomly from the possible types for this tile
+            const type = possibleTypes[Math.floor(Math.random() * possibleTypes.length)];
             
-            if (type) {
-                nodes.push({
-                    id: `node-${nodeId++}`,
-                    type,
-                    x, y,
-                    amount: Math.random() * 50 + 50,
-                });
-                break;
-            }
+            nodes.push({
+                id: `node-${nodeId++}`,
+                type,
+                x, y,
+                amount: Math.random() * 50 + 50,
+            });
+            existingLocations.add(locationKey);
         }
     }
     return nodes;
@@ -179,17 +195,19 @@ export function spawnLootContainers(tileMap: number[][], count: number): LootCon
 
     const carSpawnTiles = [54]; // R7C7 -> Dirt with traffic cone (placeholder for a car)
     const debrisSpawnTiles = [...DARK_WASTELAND_TILES, ...DEBRIS_TILES, 15, 47];
+    const militarySpawnTiles = [...DARK_WASTELAND_TILES, 55]; // Rare spawn in wastelands or near dead bushes
 
     const allSpawnableLocations: {x: number, y: number}[] = [];
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
              const tile = tileMap[y][x];
-             if (carSpawnTiles.includes(tile) || debrisSpawnTiles.includes(tile)) {
+             if (carSpawnTiles.includes(tile) || debrisSpawnTiles.includes(tile) || militarySpawnTiles.includes(tile)) {
                  allSpawnableLocations.push({x, y});
              }
         }
     }
 
+    // Shuffle locations to randomize placement
     for (let i = allSpawnableLocations.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [allSpawnableLocations[i], allSpawnableLocations[j]] = [allSpawnableLocations[j], allSpawnableLocations[i]];
@@ -205,9 +223,13 @@ export function spawnLootContainers(tileMap: number[][], count: number): LootCon
         const tile = tileMap[y][x];
         let type: LootContainerType | null = null;
 
-        if (carSpawnTiles.includes(tile) && Math.random() > 0.3) {
+        // Determine type with priority and randomness
+        if (militarySpawnTiles.includes(tile) && Math.random() > 0.85) { // 15% chance for a military crate on valid tiles
+            type = 'military_crate';
+        } else if (carSpawnTiles.includes(tile) && Math.random() > 0.3) {
             type = 'ruined_car';
         } else if (debrisSpawnTiles.includes(tile)) {
+            // Make debris piles the most common fallback
             type = 'debris_pile';
         }
 
