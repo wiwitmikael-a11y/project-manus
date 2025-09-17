@@ -11,43 +11,42 @@ class AssetLoader {
   public loaded: boolean = false;
 
   /**
-   * Loads an image using the fetch API and a Blob URL to bypass CORS-related
-   * canvas tainting issues. This is a more robust method than relying on
-   * the `crossOrigin` attribute, especially in sandboxed or complex environments,
-   * and directly addresses the "SecurityError".
+   * Memuat gambar dengan mengambil datanya terlebih dahulu sebagai blob, lalu membuat
+   * URL objek lokal. Cara ini secara kuat melewati batasan keamanan lintas-asal
+   * yang dapat "mencemari" kanvas. Memuat gambar dari URL blob yang berasal dari domain yang sama
+   * memastikan bahwa operasi seperti `drawImage` tidak memicu SecurityError.
+   * Ini adalah perbaikan mendasar untuk masalah CORS yang persisten dalam aplikasi kanvas.
    */
   private loadImage(key: string, url: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      // Step 1: Fetch the image data with CORS enabled.
-      fetch(url, { mode: 'cors' })
+      fetch(url, { mode: 'cors' }) // Secara eksplisit meminta mode CORS
         .then(response => {
           if (!response.ok) {
-            throw new Error(`HTTP error ${response.status} fetching asset '${key}' from ${url}`);
+            throw new Error(`HTTP error! status: ${response.status}`);
           }
-          // Step 2: Convert the response data to a Blob.
           return response.blob();
         })
         .then(blob => {
-          // Step 3: Create a same-origin URL for the Blob.
-          const objectUrl = URL.createObjectURL(blob);
+          const objectURL = URL.createObjectURL(blob);
           const img = new Image();
+          
           img.onload = () => {
             this.images.set(key, img);
-            URL.revokeObjectURL(objectUrl); // Clean up memory.
             resolve();
           };
+          
           img.onerror = () => {
-            URL.revokeObjectURL(objectUrl);
-            const errorMsg = `Failed to load image from blob for asset '${key}'.`;
+            URL.revokeObjectURL(objectURL);
+            const errorMsg = `Gagal memuat gambar dari URL blob untuk aset '${key}'.`;
             console.error(errorMsg);
             reject(new Error(errorMsg));
           };
-          // Step 4: Load the image from the safe, same-origin URL.
-          img.src = objectUrl;
+          
+          img.src = objectURL;
         })
         .catch(error => {
-          const errorMsg = `Failed to fetch image asset '${key}' from ${url}.`;
-          console.error(errorMsg, error);
+          const errorMsg = `Gagal mengambil aset gambar '${key}' dari ${url}. Error: ${error}`;
+          console.error(errorMsg);
           reject(new Error(errorMsg));
         });
     });
