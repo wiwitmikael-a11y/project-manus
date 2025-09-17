@@ -2,36 +2,41 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { SimulationState } from '../types.ts';
 
 export const useSimulation = (initialState: SimulationState) => {
-  const [simulationState, setSimulationState] = useState<SimulationState | null>(null);
-  const workerRef = useRef<Worker | null>(null);
+  const [simulationState, setSimulationState] = useState<SimulationState | null>(initialState);
+  const intervalRef = useRef<number | null>(null);
+
+  const tick = useCallback((state: SimulationState): SimulationState => {
+    return {
+      ...state,
+      tick: state.tick + 1,
+      agents: state.agents.map(agent => ({
+        ...agent,
+        state_timer: Math.max(0, agent.state_timer - 1),
+        energy: {
+          ...agent.energy,
+          current: Math.max(0, agent.energy.current - 0.01)
+        }
+      }))
+    };
+  }, []);
 
   useEffect(() => {
-    // Create and initialize the worker. 
-    // The { type: 'module' } is important for Vite and modern bundlers.
-    // Use different worker paths for development vs production
-    const workerPath = import.meta.env.DEV ? '/simulation.worker.ts' : '/simulation.worker.js';
-    workerRef.current = new Worker(workerPath, { type: 'module' });
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    
+    intervalRef.current = window.setInterval(() => {
+      setSimulationState(prevState => {
+        if (!prevState || prevState.isPaused) return prevState;
+        return tick(prevState);
+      });
+    }, 100);
 
-    // Handle messages from the worker (e.g., state updates)
-    workerRef.current.onmessage = (event: MessageEvent) => {
-      const { type, payload } = event.data;
-      if (type === 'stateUpdate') {
-        setSimulationState(payload);
-      }
-    };
-
-    // Send the initial state to the worker to kick things off
-    workerRef.current.postMessage({ type: 'init', payload: initialState });
-
-    // Cleanup: Terminate the worker when the component unmounts
     return () => {
-      workerRef.current?.postMessage({ type: 'stop' });
-      workerRef.current?.terminate();
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [initialState]); // The hook re-initializes if the initial state prop ever changes
+  }, [tick]);
 
   const togglePause = useCallback(() => {
-    workerRef.current?.postMessage({ type: 'togglePause' });
+    setSimulationState(prev => prev ? { ...prev, isPaused: !prev.isPaused } : null);
   }, []);
 
   return { simulationState, togglePause };
