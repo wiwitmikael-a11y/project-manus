@@ -11,36 +11,48 @@ class AssetLoader {
   public loaded: boolean = false;
 
   /**
-   * Loads an image while correctly handling Cross-Origin Resource Sharing (CORS).
-   * This is the standard and most reliable method to prevent the canvas from being
-   * tainted, which would otherwise cause a "SecurityError". By setting `crossOrigin`
-   * to 'Anonymous', we instruct the browser to request the image with the proper
-   * headers, allowing it to be used securely in the canvas.
+   * Loads an image using the fetch API and a Blob URL to bypass CORS-related
+   * canvas tainting issues. This is a more robust method than relying on
+   * the `crossOrigin` attribute, especially in sandboxed or complex environments,
+   * and directly addresses the "SecurityError".
    */
   private loadImage(key: string, url: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      const img = new Image();
-      
-      // IMPORTANT: Set crossOrigin *before* setting the src attribute.
-      // This tells the browser to request the image with CORS headers.
-      img.crossOrigin = 'Anonymous';
-
-      img.onload = () => {
-        this.images.set(key, img);
-        resolve();
-      };
-
-      img.onerror = () => {
-        const errorMsg = `Failed to load image asset '${key}' from ${url}. This is likely a CORS issue or a broken URL.`;
-        console.error(errorMsg);
-        reject(new Error(errorMsg));
-      };
-
-      // Setting the src after the event handlers are in place triggers the image load.
-      img.src = url;
+      // Step 1: Fetch the image data with CORS enabled.
+      fetch(url, { mode: 'cors' })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error(`HTTP error ${response.status} fetching asset '${key}' from ${url}`);
+          }
+          // Step 2: Convert the response data to a Blob.
+          return response.blob();
+        })
+        .then(blob => {
+          // Step 3: Create a same-origin URL for the Blob.
+          const objectUrl = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = () => {
+            this.images.set(key, img);
+            URL.revokeObjectURL(objectUrl); // Clean up memory.
+            resolve();
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            const errorMsg = `Failed to load image from blob for asset '${key}'.`;
+            console.error(errorMsg);
+            reject(new Error(errorMsg));
+          };
+          // Step 4: Load the image from the safe, same-origin URL.
+          img.src = objectUrl;
+        })
+        .catch(error => {
+          const errorMsg = `Failed to fetch image asset '${key}' from ${url}.`;
+          console.error(errorMsg, error);
+          reject(new Error(errorMsg));
+        });
     });
   }
-
+  
   public async loadAssets(): Promise<void> {
     if (this.loaded) return;
 
