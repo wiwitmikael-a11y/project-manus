@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-// Fix: Added .tsx extensions to component imports to resolve module loading errors.
 import WelcomeScreen from './components/WelcomeScreen.tsx';
 import LoadingScreen from './components/LoadingScreen.tsx';
 import SimulationDashboard from './components/SimulationDashboard.tsx';
+import ErrorBoundary from './components/ErrorBoundary.tsx';
 import { generateWorldElements } from './services/geminiService.ts';
 import { SimulationState, Agent, Gender, GameEvent, GameEventType } from './types.ts';
 import { generateMarkovName } from './services/markovService.ts';
@@ -48,7 +48,29 @@ const App: React.FC = () => {
   const startSimulation = useCallback(async () => {
     try {
       await assetLoader.loadAssets();
-      const worldElements = await generateWorldElements();
+      
+      let worldElements;
+      try {
+        worldElements = await generateWorldElements();
+      } catch (aiError) {
+        console.warn("AI generation failed, using fallback data:", aiError);
+        // Use fallback data if AI fails
+        worldElements = {
+          biomes: [
+            { name: "Rusted Scrapyard", description: "A field of decaying pre-Fall vehicles and machinery." },
+            { name: "Overgrown Plaza", description: "Nature reclaims what was once a bustling city center." }
+          ],
+          structures: [
+            { name: "Makeshift Shack", description: "A crude shelter made from corrugated metal and scavenged planks.", type: 'SHELTER' },
+            { name: "Collapsed Overpass", description: "The remains of a highway bridge, now a landmark and shelter.", type: 'LANDMARK' }
+          ],
+          creatures: [
+            { name: "Giant Rad-Roach", description: "A disturbingly large and resilient insect that fears light.", temperament: 'NEUTRAL' },
+            { name: "Scavenger Rat", description: "Mutated rodents that have grown bold and clever.", temperament: 'DOCILE' },
+            { name: "Feral Dog", description: "Once domesticated, now wild and unpredictable.", temperament: 'HOSTILE' }
+          ]
+        };
+      }
 
       const initialAgents = generateInitialAgents(5);
       const genesisEvent: GameEvent = {
@@ -129,7 +151,17 @@ const App: React.FC = () => {
       )
   }
 
-  return null; // Should not be reached
+  return (
+    <div className="flex items-center justify-center h-screen bg-slate-900 text-white">
+      <p>Loading...</p>
+    </div>
+  );
 };
 
-export default App;
+const AppWithErrorBoundary: React.FC = () => (
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);
+
+export default AppWithErrorBoundary;

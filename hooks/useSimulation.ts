@@ -8,8 +8,9 @@ export const useSimulation = (initialState: SimulationState) => {
   useEffect(() => {
     // Create and initialize the worker. 
     // The { type: 'module' } is important for Vite and modern bundlers.
-    // Fix: Changed worker instantiation to use a root-relative path to avoid URL parsing errors.
-    workerRef.current = new Worker('/simulation.worker.ts', { type: 'module' });
+    // Use different worker paths for development vs production
+    const workerPath = import.meta.env.DEV ? '/simulation.worker.ts' : '/simulation.worker.js';
+    workerRef.current = new Worker(workerPath, { type: 'module' });
 
     // Handle messages from the worker (e.g., state updates)
     workerRef.current.onmessage = (event: MessageEvent) => {

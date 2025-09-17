@@ -5,7 +5,15 @@ import { Biome, Creature, Structure } from '../types.ts';
 
 // Inisialisasi Gemini API Client
 // Kunci API diasumsikan tersedia di variabel lingkungan.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+const getApiKey = () => {
+  // Try multiple possible environment variable names
+  return import.meta.env.VITE_GEMINI_API_KEY || 
+         import.meta.env.GEMINI_API_KEY || 
+         process.env.GEMINI_API_KEY || 
+         process.env.API_KEY;
+};
+
+const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
 // Mendefinisikan skema output JSON yang kita harapkan dari model AI.
 // Ini memastikan kita mendapatkan data yang konsisten dan terstruktur.

@@ -11,11 +11,10 @@ const SimulationDashboard: React.FC<SimulationDashboardProps> = ({ initialState 
   const { simulationState, togglePause } = useSimulation(initialState);
 
   if (!simulationState) {
-    // This could show a loading spinner or a placeholder
-    // while the worker is initializing.
     return (
-        <div className="flex items-center justify-center h-screen bg-slate-900 text-amber-400">
-            Initializing Simulation Engine...
+        <div className="flex flex-col items-center justify-center h-screen bg-slate-900 text-amber-400">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-400 mb-4"></div>
+            <p>Initializing Simulation Engine...</p>
         </div>
     );
   }

@@ -18,7 +18,22 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ simulationState, camera, select
   
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !assetLoader.loaded) return;
+    if (!canvas) return;
+    
+    // Wait for assets to load before rendering
+    if (!assetLoader.loaded) {
+      const checkAssets = () => {
+        if (assetLoader.loaded) {
+          // Assets are now loaded, trigger a re-render
+          const event = new CustomEvent('assetsLoaded');
+          canvas.dispatchEvent(event);
+        } else {
+          setTimeout(checkAssets, 100);
+        }
+      };
+      checkAssets();
+      return;
+    }
     
     const ctx = canvas.getContext('2d');
     if (!ctx) return;

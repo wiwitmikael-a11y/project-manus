@@ -5,15 +5,23 @@ interface Asset {
   path: string;
 }
 
-const githubRawContentUrl = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus/main/public';
+// Use relative paths for better compatibility across environments
+const getAssetUrl = (path: string) => {
+  // In development, use Vite's asset handling
+  if (import.meta.env.DEV) {
+    return path;
+  }
+  // In production, assets should be served from the same domain
+  return path;
+};
 
 // Define all assets that need to be loaded for the game.
-// Using absolute paths to a raw content server to avoid local server config issues.
+// Using relative paths that work in both dev and production
 const assetsToLoad: Asset[] = [
-  { key: 'terrain_atlas', path: `${githubRawContentUrl}/assets/images/Terrain_Atlas_01.png` },
-  { key: 'resource_atlas', path: `${githubRawContentUrl}/assets/images/Resources_Atlas_01.png` },
-  { key: 'colonist_male_1', path: `${githubRawContentUrl}/assets/images/Male_01.png` },
-  { key: 'colonist_female_1', path: `${githubRawContentUrl}/assets/images/Female_01.png` },
+  { key: 'terrain_atlas', path: getAssetUrl('/assets/images/Terrain_Atlas_01.png') },
+  { key: 'resource_atlas', path: getAssetUrl('/assets/images/Resources_Atlas_01.png') },
+  { key: 'colonist_male_1', path: getAssetUrl('/assets/images/Male_01.png') },
+  { key: 'colonist_female_1', path: getAssetUrl('/assets/images/Female_01.png') },
 ];
 
 class AssetLoader {
