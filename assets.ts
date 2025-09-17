@@ -11,44 +11,31 @@ class AssetLoader {
   public loaded: boolean = false;
 
   /**
-   * Memuat gambar dengan mengambil datanya terlebih dahulu sebagai blob, lalu membuat
-   * URL objek lokal. Cara ini secara kuat melewati batasan keamanan lintas-asal
-   * yang dapat "mencemari" kanvas. Memuat gambar dari URL blob yang berasal dari domain yang sama
-   * memastikan bahwa operasi seperti `drawImage` tidak memicu SecurityError.
-   * Ini adalah perbaikan mendasar untuk masalah CORS yang persisten dalam aplikasi kanvas.
+   * Memuat gambar menggunakan metode standar `new Image()`.
+   * Karena semua aset sekarang dimuat dari path lokal (domain yang sama),
+   * metode ini sangat andal dan efisien, menghilangkan kebutuhan
+   * untuk solusi CORS yang kompleks seperti fetch/blob.
    */
   private loadImage(key: string, url: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      fetch(url, { mode: 'cors' }) // Secara eksplisit meminta mode CORS
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          return response.blob();
-        })
-        .then(blob => {
-          const objectURL = URL.createObjectURL(blob);
-          const img = new Image();
-          
-          img.onload = () => {
-            this.images.set(key, img);
-            resolve();
-          };
-          
-          img.onerror = () => {
-            URL.revokeObjectURL(objectURL);
-            const errorMsg = `Gagal memuat gambar dari URL blob untuk aset '${key}'.`;
-            console.error(errorMsg);
-            reject(new Error(errorMsg));
-          };
-          
-          img.src = objectURL;
-        })
-        .catch(error => {
-          const errorMsg = `Gagal mengambil aset gambar '${key}' dari ${url}. Error: ${error}`;
-          console.error(errorMsg);
-          reject(new Error(errorMsg));
-        });
+      const img = new Image();
+      // Atribut crossOrigin tidak lagi krusial untuk aset lokal, tetapi ini adalah
+      // praktik yang baik untuk dipertahankan jika Anda memutuskan untuk menggunakan CDN
+      // yang dikonfigurasi dengan benar di masa depan.
+      img.crossOrigin = 'Anonymous';
+      
+      img.onload = () => {
+        this.images.set(key, img);
+        resolve();
+      };
+      
+      img.onerror = () => {
+        const errorMsg = `Gagal memuat aset gambar '${key}' dari path ${url}. Pastikan file ada dan path-nya benar.`;
+        console.error(errorMsg);
+        reject(new Error(errorMsg));
+      };
+      
+      img.src = url;
     });
   }
   

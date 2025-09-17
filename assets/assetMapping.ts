@@ -5,11 +5,6 @@
  * Ini adalah pusat kendali untuk sistem rendering animasi.
  */
 
-// --- SUMBER ASET ---
-const MALE_COLONIST_ATLAS_URL = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus-assets/main/Male_01.png';
-const FEMALE_COLONIST_ATLAS_URL = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus-assets/main/Female_01.png';
-
-
 // Arah yang didukung langsung di spritesheet. Arah lain akan di-flip.
 type AnimationDirection = 'S' | 'SE' | 'E' | 'NE' | 'N';
 
@@ -40,7 +35,7 @@ export const spritesheetMapping: Record<string, SpritesheetData> = {
    *     Baris 0-4 untuk 'walk', Baris 5-9 untuk 'idle'.
    */
   'colonist_male_1': {
-    url: MALE_COLONIST_ATLAS_URL,
+    url: '/assets/images/Male_01.png',
     frameSize: 128,
     animations: {
       walk: {
@@ -60,7 +55,7 @@ export const spritesheetMapping: Record<string, SpritesheetData> = {
    * Metadata untuk spritesheet kolonis wanita. Strukturnya sama.
    */
   'colonist_female_1': {
-    url: FEMALE_COLONIST_ATLAS_URL,
+    url: '/assets/images/Female_01.png',
     frameSize: 128,
     animations: {
       walk: {

@@ -12,10 +12,9 @@ export interface AtlasMapping {
 
 // All coordinates are in pixels on the source image, an 8x8 grid on a 1024x1024 atlas.
 // Each cell is 128x128px.
-const RESOURCE_ATLAS_URL = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus-assets/main/Resources_Atlas_01.png';
 
 export const resourceMapping: AtlasMapping = {
-    url: RESOURCE_ATLAS_URL,
+    url: '/assets/images/Resources_Atlas_01.png',
     nodes: {
         // R1C2: Batang pohon tumbang besar (Large fallen tree trunk)
         'fallen_tree': { x: 128, y: 0, w: 128, h: 128 },
