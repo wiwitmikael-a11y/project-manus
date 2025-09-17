@@ -5,13 +5,15 @@ interface Asset {
   path: string;
 }
 
+const githubRawContentUrl = 'https://raw.githubusercontent.com/wiwitmikael-a11y/project-manus/main/public';
+
 // Define all assets that need to be loaded for the game.
-// Dengan folder `assets` di dalam `public`, path absolut dari root adalah metode yang benar.
+// Using absolute paths to a raw content server to avoid local server config issues.
 const assetsToLoad: Asset[] = [
-  { key: 'terrain_atlas', path: '/assets/images/Terrain_Atlas_01.png' },
-  { key: 'resource_atlas', path: '/assets/images/Resources_Atlas_01.png' },
-  { key: 'colonist_male_1', path: '/assets/images/Male_01.png' },
-  { key: 'colonist_female_1', path: '/assets/images/Female_01.png' },
+  { key: 'terrain_atlas', path: `${githubRawContentUrl}/assets/images/Terrain_Atlas_01.png` },
+  { key: 'resource_atlas', path: `${githubRawContentUrl}/assets/images/Resources_Atlas_01.png` },
+  { key: 'colonist_male_1', path: `${githubRawContentUrl}/assets/images/Male_01.png` },
+  { key: 'colonist_female_1', path: `${githubRawContentUrl}/assets/images/Female_01.png` },
 ];
 
 class AssetLoader {
@@ -21,6 +23,8 @@ class AssetLoader {
   private loadImage(asset: Asset): Promise<void> {
     return new Promise((resolve, reject) => {
       const img = new Image();
+      // Add crossOrigin attribute for loading images from another domain into a canvas.
+      img.crossOrigin = 'anonymous';
       img.src = asset.path;
       img.onload = () => {
         this.images.set(asset.key, img);
