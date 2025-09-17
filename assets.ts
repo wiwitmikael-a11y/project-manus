@@ -1,67 +1,52 @@
 // assets.ts
-// Fix: Added .ts extension to resolve module import error.
-import { spritesheetMapping } from './assets/assetMapping.ts';
-// Fix: Added .ts extension to resolve module import error.
-import { terrainMapping } from './assets/terrainAssetMapping.ts';
-// Fix: Added .ts extension to resolve module import error.
-import { resourceMapping } from './assets/resourceAssetMapping.ts';
+
+interface Asset {
+  key: string;
+  path: string;
+}
+
+// Define all assets that need to be loaded for the game.
+// Dengan folder `assets` di dalam `public`, path absolut dari root adalah metode yang benar.
+const assetsToLoad: Asset[] = [
+  { key: 'terrain_atlas', path: '/assets/images/Terrain_Atlas_01.png' },
+  { key: 'resource_atlas', path: '/assets/images/Resources_Atlas_01.png' },
+  { key: 'colonist_male_1', path: '/assets/images/Male_01.png' },
+  { key: 'colonist_female_1', path: '/assets/images/Female_01.png' },
+];
 
 class AssetLoader {
   private images: Map<string, HTMLImageElement> = new Map();
   public loaded: boolean = false;
 
-  /**
-   * Memuat gambar menggunakan metode standar `new Image()`.
-   * Karena semua aset sekarang dimuat dari path lokal (domain yang sama),
-   * metode ini sangat andal dan efisien, menghilangkan kebutuhan
-   * untuk solusi CORS yang kompleks seperti fetch/blob.
-   */
-  private loadImage(key: string, url: string): Promise<void> {
+  private loadImage(asset: Asset): Promise<void> {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      // Atribut crossOrigin tidak lagi krusial untuk aset lokal, tetapi ini adalah
-      // praktik yang baik untuk dipertahankan jika Anda memutuskan untuk menggunakan CDN
-      // yang dikonfigurasi dengan benar di masa depan.
-      img.crossOrigin = 'Anonymous';
-      
+      img.src = asset.path;
       img.onload = () => {
-        this.images.set(key, img);
+        this.images.set(asset.key, img);
         resolve();
       };
-      
       img.onerror = () => {
-        const errorMsg = `Gagal memuat aset gambar '${key}' dari path ${url}. Pastikan file ada dan path ini benar relatif terhadap file index.html Anda.`;
+        const errorMsg = `Gagal memuat aset gambar '${asset.key}' dari path ${asset.path}. Path ini sudah benar untuk struktur folder 'public'. Periksa tab Network di DevTools untuk error 404. Jika ada error 404, masalahnya ada pada konfigurasi server atau cache deployment, bukan pada kode.`;
         console.error(errorMsg);
         reject(new Error(errorMsg));
       };
-      
-      img.src = url;
     });
   }
-  
+
   public async loadAssets(): Promise<void> {
-    if (this.loaded) return;
-
-    const assetPromises: Promise<void>[] = [];
-
-    // Load agent spritesheets
-    for (const key in spritesheetMapping) {
-      assetPromises.push(this.loadImage(key, spritesheetMapping[key].url));
+    if (this.loaded) {
+      return;
     }
-    
-    // Load terrain atlas
-    assetPromises.push(this.loadImage('terrain_atlas', terrainMapping.url));
-
-    // Load resource atlas
-    assetPromises.push(this.loadImage('resource_atlas', resourceMapping.url));
-
     try {
-        await Promise.all(assetPromises);
-        this.loaded = true;
-        console.log("All game assets loaded successfully.");
+      await Promise.all(assetsToLoad.map(asset => this.loadImage(asset)));
+      this.loaded = true;
+      console.log("Semua aset game berhasil dimuat.");
     } catch (error) {
-        console.error("A critical error occurred during asset loading. The simulation cannot start.", error);
-        throw new Error("Failed to load critical game assets.");
+      console.error("Terjadi error kritis saat memuat aset. Simulasi tidak bisa dimulai.");
+      this.loaded = false;
+      // Re-throw to allow the UI to catch it and display an error state.
+      throw error;
     }
   }
 

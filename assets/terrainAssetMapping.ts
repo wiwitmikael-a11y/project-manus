@@ -1,19 +1,15 @@
 // assets/terrainAssetMapping.ts
 
-export interface TerrainMapping {
-    url: string;
-    tileSize: number;
-    atlasWidthInTiles: number;
-    atlasHeightInTiles: number;
-}
+export const terrainMapping = {
+    /**
+     * The size of a single tile within the terrain_atlas.png spritesheet.
+     * Assumes square tiles. e.g. 32x32 pixels per tile in the atlas.
+     */
+    tileSize: 32,
 
-const TILE_SIZE = 128; // The source image tile size in pixels
-const ATLAS_WIDTH_IN_TILES = 8;
-const ATLAS_HEIGHT_IN_TILES = 8;
-
-export const terrainMapping: TerrainMapping = {
-    url: 'assets/images/Terrain_Atlas_01.png',
-    tileSize: TILE_SIZE,
-    atlasWidthInTiles: ATLAS_WIDTH_IN_TILES,
-    atlasHeightInTiles: ATLAS_HEIGHT_IN_TILES,
+    /**
+     * The number of tiles horizontally in the terrain_atlas.png spritesheet.
+     * If the atlas is 256px wide and tiles are 32px, this would be 8.
+     */
+    atlasWidthInTiles: 8,
 };
