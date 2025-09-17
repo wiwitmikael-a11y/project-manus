@@ -14,7 +14,7 @@ export interface AtlasMapping {
 // Each cell is 128x128px.
 
 export const resourceMapping: AtlasMapping = {
-    url: '/assets/images/Resources_Atlas_01.png',
+    url: 'assets/images/Resources_Atlas_01.png',
     nodes: {
         // R1C2: Batang pohon tumbang besar (Large fallen tree trunk)
         'fallen_tree': { x: 128, y: 0, w: 128, h: 128 },

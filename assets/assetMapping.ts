@@ -35,7 +35,7 @@ export const spritesheetMapping: Record<string, SpritesheetData> = {
    *     Baris 0-4 untuk 'walk', Baris 5-9 untuk 'idle'.
    */
   'colonist_male_1': {
-    url: '/assets/images/Male_01.png',
+    url: 'assets/images/Male_01.png',
     frameSize: 128,
     animations: {
       walk: {
@@ -55,7 +55,7 @@ export const spritesheetMapping: Record<string, SpritesheetData> = {
    * Metadata untuk spritesheet kolonis wanita. Strukturnya sama.
    */
   'colonist_female_1': {
-    url: '/assets/images/Female_01.png',
+    url: 'assets/images/Female_01.png',
     frameSize: 128,
     animations: {
       walk: {

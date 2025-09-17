@@ -30,7 +30,7 @@ class AssetLoader {
       };
       
       img.onerror = () => {
-        const errorMsg = `Gagal memuat aset gambar '${key}' dari path ${url}. Pastikan file ada dan path-nya benar.`;
+        const errorMsg = `Gagal memuat aset gambar '${key}' dari path ${url}. Pastikan file ada dan path ini benar relatif terhadap file index.html Anda.`;
         console.error(errorMsg);
         reject(new Error(errorMsg));
       };
