@@ -1,3 +1,4 @@
+
 // types.ts
 
 // --- Enums and Primitive Types ---
@@ -29,6 +30,9 @@ export interface Agent {
   destination: { x: number; y: number } | null;
   path: PathNode[] | null;
   task: any | null; // More specific task types can be defined later
+  health: { current: number; max: number; };
+  morale: { current: number; max: number; };
+  energy: { current: number; max: number; };
 }
 
 export interface ColonyResources {

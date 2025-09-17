@@ -1,5 +1,9 @@
+
 // gameConstants.ts
 import { StructureDefinition, ResearchProject, StructureType } from './types.ts';
+
+// Ukuran render untuk setiap petak di kanvas, dalam piksel.
+export const TILE_RENDER_SIZE = 64;
 
 // Research Projects
 export const RESEARCH_TREE: ResearchProject[] = [

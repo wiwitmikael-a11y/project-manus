@@ -1,3 +1,4 @@
+
 import { SimulationState, Agent } from '../types.ts';
 import { runColonyAI } from './colonyAI.ts';
 
@@ -42,37 +43,53 @@ function updateAgent(agent: Agent, state: SimulationState): Agent {
       newAgent.state_timer -= 1;
     }
 
-    // Simple Finite State Machine (FSM) for agent behavior
+    // --- Pembaruan Statistik Agen ---
+    // Energi terkuras lebih cepat saat tidak diam
+    const energyDepletionRate = newAgent.state === 'idle' ? 0.005 : 0.02;
+    newAgent.energy.current = Math.max(0, newAgent.energy.current - energyDepletionRate);
+
+    // Simple Finite State Machine (FSM) untuk perilaku agen
     if (newAgent.state_timer <= 0) {
-        // Simple AI: Wander around. A real implementation would use a behavior tree or goal-oriented system.
-        const shouldWander = Math.random() > 0.2;
-        if (shouldWander && newAgent.state === 'idle') {
-            newAgent.state = 'walking';
-            const destX = Math.max(0, Math.min(state.world.width - 1, newAgent.x + (Math.random() - 0.5) * 10));
-            const destY = Math.max(0, Math.min(state.world.height - 1, newAgent.y + (Math.random() - 0.5) * 10));
-            newAgent.destination = { x: destX, y: destY };
-            newAgent.state_timer = 1000; // Give it plenty of time to get there
+        // Jika energi rendah, coba untuk istirahat (menjadi diam)
+        if (newAgent.energy.current < 20) {
+             newAgent.state = 'idle';
+             newAgent.destination = null;
+             newAgent.state_timer = 300; // Istirahat selama 15 detik
         } else {
-            newAgent.state = 'idle';
-            newAgent.destination = null;
-            newAgent.state_timer = Math.random() * 200 + 50; // idle for 2.5-12.5 seconds
+            const shouldWander = Math.random() > 0.2;
+            if (shouldWander && newAgent.state === 'idle') {
+                newAgent.state = 'walking';
+                const destX = Math.max(0, Math.min(state.world.width - 1, newAgent.x + (Math.random() - 0.5) * 10));
+                const destY = Math.max(0, Math.min(state.world.height - 1, newAgent.y + (Math.random() - 0.5) * 10));
+                newAgent.destination = { x: destX, y: destY };
+                newAgent.state_timer = 1000; // Beri banyak waktu untuk sampai
+            } else {
+                newAgent.state = 'idle';
+                newAgent.destination = null;
+                newAgent.state_timer = Math.random() * 200 + 50; // diam selama 2.5-12.5 detik
+            }
         }
     }
+    
+    // Jika diam, perlahan pulihkan energi
+    if (newAgent.state === 'idle') {
+        newAgent.energy.current = Math.min(newAgent.energy.max, newAgent.energy.current + 0.05);
+    }
 
-    // Movement logic for walking agents
+    // Logika pergerakan untuk agen yang berjalan
     if (newAgent.state === 'walking' && newAgent.destination) {
         const dx = newAgent.destination.x - newAgent.x;
         const dy = newAgent.destination.y - newAgent.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist < 0.1) {
-            // Arrived at destination
+            // Tiba di tujuan
             newAgent.state = 'idle';
             newAgent.destination = null;
             newAgent.state_timer = Math.random() * 100 + 50;
         } else {
-            // Move towards destination
-            const moveSpeed = 0.05; // tiles per tick
+            // Bergerak menuju tujuan
+            const moveSpeed = 0.05; // petak per tick
             newAgent.x += (dx / dist) * moveSpeed;
             newAgent.y += (dy / dist) * moveSpeed;
         }

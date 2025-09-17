@@ -27,6 +27,9 @@ const generateInitialAgents = (count: number): Agent[] => {
       destination: null,
       path: null,
       task: null,
+      health: { current: 100, max: 100 },
+      morale: { current: Math.floor(Math.random() * 20) + 50, max: 100 }, // Morale awal antara 50-70
+      energy: { current: Math.floor(Math.random() * 40) + 60, max: 100 }, // Energi awal antara 60-100
     });
   }
   return agents;

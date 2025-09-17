@@ -1,3 +1,4 @@
+
 // components/AgentCard.tsx
 import React from 'react';
 import { Agent } from '../types.ts';
@@ -31,10 +32,9 @@ const AgentCard: React.FC<AgentCardProps> = ({ agent }) => {
             </div>
         </div>
         <div className="mt-4 space-y-3">
-             {/* Placeholder stats. These would be part of the Agent type in a more complex sim */}
-            <StatBar label="Health" value={85} max={100} color="bg-red-500" />
-            <StatBar label="Morale" value={60} max={100} color="bg-sky-500" />
-            <StatBar label="Energy" value={75} max={100} color="bg-yellow-500" />
+            <StatBar label="Health" value={agent.health.current} max={agent.health.max} color="bg-red-500" />
+            <StatBar label="Morale" value={agent.morale.current} max={agent.morale.max} color="bg-sky-500" />
+            <StatBar label="Energy" value={agent.energy.current} max={agent.energy.max} color="bg-yellow-500" />
         </div>
     </div>
   );

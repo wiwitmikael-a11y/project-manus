@@ -1,16 +1,16 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { SimulationState } from '../types.ts';
 import GameCanvas from './GameCanvas.tsx';
 import HudSidebar from './HudSidebar.tsx';
 import CommandBar from './CommandBar.tsx';
 import AgentListModal from './AgentListModal.tsx';
+import { TILE_RENDER_SIZE } from '../gameConstants.ts';
 
 interface SimulationViewportProps {
   simulationState: SimulationState;
   onTogglePause: () => void;
 }
-
-const TILE_RENDER_SIZE = 64; // Must match canvas render size
 
 const SimulationViewport: React.FC<SimulationViewportProps> = ({ simulationState, onTogglePause }) => {
   const [camera, setCamera] = useState({ x: 50 * TILE_RENDER_SIZE, y: 50 * TILE_RENDER_SIZE, zoom: 0.5 });

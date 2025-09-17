@@ -1,17 +1,17 @@
+
 import React, { useRef, useEffect } from 'react';
 import { SimulationState } from '../types.ts';
 import { assetLoader } from '../assets.ts';
 import { terrainMapping } from '../assets/terrainAssetMapping.ts';
 import { spritesheetMapping } from '../assets/assetMapping.ts';
 import { resourceMapping } from '../assets/resourceAssetMapping.ts';
+import { TILE_RENDER_SIZE } from '../gameConstants.ts';
 
 interface GameCanvasProps {
   simulationState: SimulationState;
   camera: { x: number; y: number; zoom: number };
   selectedAgentId: string | null;
 }
-
-const TILE_RENDER_SIZE = 64; // How big to draw each tile on screen
 
 const GameCanvas: React.FC<GameCanvasProps> = ({ simulationState, camera, selectedAgentId }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
