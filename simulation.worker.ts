@@ -1,7 +1,7 @@
 // simulation.worker.ts
 import { SimulationState } from './types.ts';
 import { tick } from './simulation/simulationEngine.ts';
-import { generateMap, spawnResourceNodes, spawnLootContainers } from './services/mapGenerationService.ts';
+import { generateMap, spawnResourceNodes, spawnLootContainers } from './mapGenerationService.ts';
 
 let simulationState: SimulationState | null = null;
 let intervalId: number | null = null;

@@ -1,6 +1,7 @@
-import React, { useRef, useEffect } from 'react';
+
+import React, { useRef, useEffect, useState } from 'react';
 import { SimulationState } from '../types.ts';
-import { assetLoader } from '../assets.ts';
+import { IllusionEngine } from '../IllusionEngine.ts';
 import { TILE_RENDER_SIZE } from '../gameConstants.ts';
 
 interface GameCanvasProps {
@@ -11,35 +12,63 @@ interface GameCanvasProps {
 
 const GameCanvas: React.FC<GameCanvasProps> = ({ simulationState, camera, selectedAgentId }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
+  const [engine, setEngine] = useState<IllusionEngine | null>(null);
+
+  // Initialize the rendering engine once the canvas is available
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (canvas && !engine) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        setEngine(new IllusionEngine(ctx));
+      }
+    }
+  }, [engine]);
+
+  // The main rendering loop, driven by requestAnimationFrame
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !engine) return;
     
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-
     let animationFrameId: number;
 
     const render = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.save();
-      
-      // Apply camera transformations
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.scale(camera.zoom, camera.zoom);
-      ctx.translate(-camera.x, -camera.y);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        
+        // Ensure canvas resolution matches its display size for sharpness
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+        }
 
-      // Draw simple grid background
-      drawGrid(ctx, simulationState);
-      drawAgents(ctx, simulationState, selectedAgentId);
-      
-      ctx.restore();
-      animationFrameId = requestAnimationFrame(render);
+        const effectiveWidth = rect.width;
+        const effectiveHeight = rect.height;
+
+        // Set dynamic background color based on in-game time
+        canvas.style.backgroundColor = engine.getAtmosphereColor(simulationState.tick);
+
+        // --- Camera and Scene Transformation ---
+        const camGridX = camera.x / TILE_RENDER_SIZE;
+        const camGridY = camera.y / TILE_RENDER_SIZE;
+        const { screenX: camScreenX, screenY: camScreenY } = engine.worldToScreen(camGridX, camGridY);
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        
+        // Center the view and apply zoom and camera position
+        ctx.translate(effectiveWidth / 2, effectiveHeight / 2);
+        ctx.scale(camera.zoom, camera.zoom);
+        ctx.translate(-camScreenX, -camScreenY);
+        
+        // Render the entire scene using the engine
+        engine.render(simulationState, camera, selectedAgentId);
+        
+        ctx.restore();
+        animationFrameId = requestAnimationFrame(render);
     };
 
     animationFrameId = requestAnimationFrame(render);
@@ -47,61 +76,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ simulationState, camera, select
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [simulationState, camera, selectedAgentId]);
+  }, [simulationState, camera, selectedAgentId, engine]);
   
-  return <canvas ref={canvasRef} className="w-full h-full bg-slate-800" />;
+  return <canvas ref={canvasRef} className="w-full h-full" />;
 };
-
-function drawGrid(ctx: CanvasRenderingContext2D, state: SimulationState) {
-  const { width, height } = state.world;
-  
-  ctx.strokeStyle = '#374151';
-  ctx.lineWidth = 1;
-  
-  for (let x = 0; x <= width; x++) {
-    ctx.beginPath();
-    ctx.moveTo(x * TILE_RENDER_SIZE, 0);
-    ctx.lineTo(x * TILE_RENDER_SIZE, height * TILE_RENDER_SIZE);
-    ctx.stroke();
-  }
-  
-  for (let y = 0; y <= height; y++) {
-    ctx.beginPath();
-    ctx.moveTo(0, y * TILE_RENDER_SIZE);
-    ctx.lineTo(width * TILE_RENDER_SIZE, y * TILE_RENDER_SIZE);
-    ctx.stroke();
-  }
-}
-
-function drawAgents(ctx: CanvasRenderingContext2D, state: SimulationState, selectedAgentId: string | null) {
-  state.agents.forEach(agent => {
-    const x = agent.x * TILE_RENDER_SIZE;
-    const y = agent.y * TILE_RENDER_SIZE;
-    
-    // Draw selection indicator
-    if (agent.id === selectedAgentId) {
-      ctx.beginPath();
-      ctx.arc(x, y, TILE_RENDER_SIZE / 2 + 5, 0, 2 * Math.PI);
-      ctx.strokeStyle = '#fbbf24';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    }
-    
-    // Draw agent as colored circle
-    ctx.beginPath();
-    ctx.arc(x, y, TILE_RENDER_SIZE / 3, 0, 2 * Math.PI);
-    ctx.fillStyle = agent.gender === 'male' ? '#ef4444' : '#f59e0b';
-    ctx.fill();
-    ctx.strokeStyle = '#1f2937';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    
-    // Draw name
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '12px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(agent.name, x, y - TILE_RENDER_SIZE / 2 - 5);
-  });
-}
 
 export default GameCanvas;

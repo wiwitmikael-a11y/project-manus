@@ -24,7 +24,6 @@ export interface Agent {
   gender: Gender;
   x: number; // world grid coordinates
   y: number; // world grid coordinates
-  sprite: string;
   state: AgentState;
   state_timer: number;
   destination: { x: number; y: number } | null;
